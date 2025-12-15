@@ -9,6 +9,19 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
 
+app.get("/", (_req, res) =>
+  res.json({
+    name: "Speak Better API",
+    status: "running",
+    version: "1.0.0",
+    endpoints: {
+      health: "/health",
+      transcribe: "/v1/transcribe",
+      improve: "/v1/improve",
+    },
+  })
+);
+
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
 app.use("/v1/transcribe", transcribeRouter);
