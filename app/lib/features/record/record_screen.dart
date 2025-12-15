@@ -212,12 +212,17 @@ class _RecordScreenState extends State<RecordScreen> {
         _isProcessing = true;
       });
 
+      // Determine the language being spoken (not UI language)
+      // If learning English, they're speaking English. If learning Korean, they're speaking Korean.
+      final spokenLanguage =
+          widget.learnerMode == 'english_learner' ? 'en' : 'ko';
+
       // Transcribe
       Map<String, dynamic> t;
       try {
         t = await _api.transcribe(
           audioFile: file,
-          language: widget.language,
+          language: spokenLanguage,
         );
       } catch (e) {
         // Log error to console
@@ -253,7 +258,7 @@ class _RecordScreenState extends State<RecordScreen> {
       Map<String, dynamic> improved;
       try {
         improved = await _api.improve(
-          language: widget.language,
+          language: spokenLanguage,
           learnerMode: widget.learnerMode,
           transcript: transcript,
           topic: widget.topicTitle != null || widget.topicPrompt != null
