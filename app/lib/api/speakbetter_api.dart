@@ -1,15 +1,49 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
 import '../config.dart';
+import '../services/auth_service.dart';
 
 class SpeakBetterApi {
-  SpeakBetterApi()
-      : _dio = Dio(BaseOptions(
+  SpeakBetterApi({AuthService? authService})
+      : _authService = authService ?? AuthService(),
+        _dio = Dio(BaseOptions(
           baseUrl: AppConfig.apiBaseUrl,
           connectTimeout: const Duration(seconds: 20),
           receiveTimeout: const Duration(seconds: 60),
-        ));
+        )) {
+    // Add interceptor to include auth token in requests
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) async {
+          // Get ID token and add to Authorization header
+          final token = await _authService.getIdToken();
+          if (token != null) {
+            options.headers['Authorization'] = 'Bearer $token';
+          }
+          return handler.next(options);
+        },
+        onError: (error, handler) async {
+          // If 401, try refreshing token once
+          if (error.response?.statusCode == 401) {
+            final token = await _authService.getIdToken(forceRefresh: true);
+            if (token != null) {
+              error.requestOptions.headers['Authorization'] = 'Bearer $token';
+              // Retry the request
+              try {
+                final response = await _dio.fetch(error.requestOptions);
+                return handler.resolve(response);
+              } catch (e) {
+                return handler.next(error);
+              }
+            }
+          }
+          return handler.next(error);
+        },
+      ),
+    );
+  }
 
+  final AuthService _authService;
   final Dio _dio;
 
   Future<Map<String, dynamic>> transcribe({

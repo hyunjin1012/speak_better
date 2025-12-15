@@ -1,12 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'data/local_store.dart';
+import 'features/auth/login_screen.dart';
 import 'features/topics/topic_list_screen.dart';
 import 'features/history/history_screen.dart';
+import 'services/auth_service.dart';
+
+// Import firebase_options.dart after running: flutterfire configure
+// Uncomment the line below after running flutterfire configure:
+// import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await LocalStore.init();
+  
+  // Initialize Firebase
+  // After running 'flutterfire configure', uncomment the line below:
+  // await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // For now, we'll handle the case where Firebase might not be initialized
+  try {
+    await Firebase.initializeApp();
+  } catch (e) {
+    print('Firebase initialization error: $e');
+    print('Please run: flutterfire configure');
+    print('Then update main.dart to use firebase_options.dart');
+  }
+  
   runApp(const ProviderScope(child: SpeakBetterApp()));
 }
 
@@ -21,7 +41,36 @@ class SpeakBetterApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
       ),
-      home: const LanguageSelectionScreen(),
+      home: const AuthWrapper(),
+    );
+  }
+}
+
+class AuthWrapper extends StatelessWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final authService = AuthService();
+    
+    return StreamBuilder(
+      stream: authService.authStateChanges,
+      builder: (context, snapshot) {
+        // Show loading while checking auth state
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        
+        // If user is signed in, show main app
+        if (snapshot.hasData && snapshot.data != null) {
+          return const LanguageSelectionScreen();
+        }
+        
+        // If no user, show login screen
+        return const LoginScreen();
+      },
     );
   }
 }
@@ -158,12 +207,23 @@ class MainScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isKorean = language == 'ko';
+    final authService = AuthService();
 
     return DefaultTabController(
       length: 2,
       child: Scaffold(
         appBar: AppBar(
           title: Text(isKorean ? 'Speak Better' : 'Speak Better'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.logout),
+              tooltip: isKorean ? '로그아웃' : 'Sign Out',
+              onPressed: () async {
+                await authService.signOut();
+                // Navigation handled by auth state listener
+              },
+            ),
+          ],
           bottom: TabBar(
             tabs: [
               Tab(text: isKorean ? '주제' : 'Topics'),
