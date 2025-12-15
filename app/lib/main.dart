@@ -11,12 +11,12 @@ import 'services/auth_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await LocalStore.init();
-  
+
   // Initialize Firebase with the generated options
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  
+
   runApp(const ProviderScope(child: SpeakBetterApp()));
 }
 

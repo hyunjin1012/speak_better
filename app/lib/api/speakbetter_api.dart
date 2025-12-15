@@ -54,7 +54,7 @@ class SpeakBetterApi {
     final filePath = audioFile.path;
     final extension = filePath.split('.').last.toLowerCase();
     final filename = 'audio.$extension';
-    
+
     final form = FormData.fromMap({
       'language': language,
       'audio': await MultipartFile.fromFile(filePath, filename: filename),
@@ -81,4 +81,3 @@ class SpeakBetterApi {
     return Map<String, dynamic>.from(res.data as Map);
   }
 }
-
