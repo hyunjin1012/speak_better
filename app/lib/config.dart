@@ -6,4 +6,3 @@ class AppConfig {
     defaultValue: 'https://speakbetter-api.onrender.com',
   );
 }
-
