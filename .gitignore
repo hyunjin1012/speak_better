@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+.packages
+.pub-cache/
+
+# Build outputs
+dist/
+build/
+*.log
+
+# Environment files
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Hive
+*.hive
+*.lock
+
+# Uploads
+api/uploads/*
+
