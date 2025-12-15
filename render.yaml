@@ -1,19 +1,12 @@
 services:
   - type: web
     name: speakbetter-api
-    env: node
+    runtime: node
     rootDir: api
     buildCommand: npm ci && npm run build
     startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        fromService:
-          type: web
-          name: speakbetter-api
-          property: port
-    # Add these in Render dashboard:
-    # OPENAI_API_KEY (secret) - Your OpenAI API key
-    # MAX_AUDIO_SECONDS (optional) - Max audio length in seconds
+    # Add OPENAI_API_KEY in Render dashboard as a secret environment variable
 
