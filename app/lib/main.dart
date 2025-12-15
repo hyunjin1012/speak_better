@@ -1,31 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'data/local_store.dart';
 import 'features/auth/login_screen.dart';
 import 'features/topics/topic_list_screen.dart';
 import 'features/history/history_screen.dart';
 import 'services/auth_service.dart';
 
-// Import firebase_options.dart after running: flutterfire configure
-// Uncomment the line below after running flutterfire configure:
-// import 'firebase_options.dart';
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await LocalStore.init();
   
-  // Initialize Firebase
-  // After running 'flutterfire configure', uncomment the line below:
-  // await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  // For now, we'll handle the case where Firebase might not be initialized
-  try {
-    await Firebase.initializeApp();
-  } catch (e) {
-    print('Firebase initialization error: $e');
-    print('Please run: flutterfire configure');
-    print('Then update main.dart to use firebase_options.dart');
-  }
+  // Initialize Firebase with the generated options
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   
   runApp(const ProviderScope(child: SpeakBetterApp()));
 }
@@ -52,7 +42,7 @@ class AuthWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final authService = AuthService();
-    
+
     return StreamBuilder(
       stream: authService.authStateChanges,
       builder: (context, snapshot) {
@@ -62,12 +52,12 @@ class AuthWrapper extends StatelessWidget {
             body: Center(child: CircularProgressIndicator()),
           );
         }
-        
+
         // If user is signed in, show main app
         if (snapshot.hasData && snapshot.data != null) {
           return const LanguageSelectionScreen();
         }
-        
+
         // If no user, show login screen
         return const LoginScreen();
       },
@@ -79,7 +69,8 @@ class LanguageSelectionScreen extends StatefulWidget {
   const LanguageSelectionScreen({super.key});
 
   @override
-  State<LanguageSelectionScreen> createState() => _LanguageSelectionScreenState();
+  State<LanguageSelectionScreen> createState() =>
+      _LanguageSelectionScreenState();
 }
 
 class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
@@ -133,7 +124,8 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
                   ],
                 ),
               ],
-              if (_selectedLanguage != null && _selectedLearnerMode != null) ...[
+              if (_selectedLanguage != null &&
+                  _selectedLearnerMode != null) ...[
                 const SizedBox(height: 48),
                 ElevatedButton(
                   onPressed: () {
@@ -148,7 +140,8 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
                     );
                   },
                   style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 32, vertical: 16),
                   ),
                   child: const Text('Start', style: TextStyle(fontSize: 18)),
                 ),
@@ -244,4 +237,3 @@ class MainScreen extends StatelessWidget {
     );
   }
 }
-
