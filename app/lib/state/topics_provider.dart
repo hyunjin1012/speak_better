@@ -27,6 +27,11 @@ class TopicsNotifier extends StateNotifier<List<Topic>> {
     _loadTopics();
   }
 
+  Future<void> updateTopic(Topic topic) async {
+    await LocalStore.saveTopic(topic);
+    _loadTopics();
+  }
+
   List<Topic> getTopicsByLanguage(String language) {
     return state.where((t) => t.language == language).toList();
   }

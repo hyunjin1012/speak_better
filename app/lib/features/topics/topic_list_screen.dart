@@ -123,10 +123,20 @@ class _TopicListScreenState extends ConsumerState<TopicListScreen> {
                             ),
                           ),
                           if (!topic.isBuiltIn)
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline),
-                              color: Colors.red,
-                              onPressed: () => _deleteTopic(context, topic.id),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.edit_outlined),
+                                  color: colorScheme.primary,
+                                  onPressed: () => _showEditTopicDialog(context, topic),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline),
+                                  color: Colors.red,
+                                  onPressed: () => _deleteTopic(context, topic.id),
+                                ),
+                              ],
                             )
                           else
                             Icon(
@@ -190,6 +200,61 @@ class _TopicListScreenState extends ConsumerState<TopicListScreen> {
               }
             },
             child: Text(widget.language == 'ko' ? '추가' : 'Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditTopicDialog(BuildContext context, Topic topic) {
+    final titleController = TextEditingController(text: topic.title);
+    final promptController = TextEditingController(text: topic.prompt);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(widget.language == 'ko' ? '주제 편집' : 'Edit Topic'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleController,
+              decoration: InputDecoration(
+                labelText: widget.language == 'ko' ? '제목' : 'Title',
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: promptController,
+              decoration: InputDecoration(
+                labelText: widget.language == 'ko' ? '프롬프트' : 'Prompt',
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(widget.language == 'ko' ? '취소' : 'Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              if (titleController.text.isNotEmpty && promptController.text.isNotEmpty) {
+                ref.read(topicsProvider.notifier).updateTopic(
+                      Topic(
+                        id: topic.id,
+                        title: titleController.text,
+                        prompt: promptController.text,
+                        language: topic.language,
+                        isBuiltIn: topic.isBuiltIn,
+                        createdAt: topic.createdAt,
+                      ),
+                    );
+                Navigator.pop(context);
+              }
+            },
+            child: Text(widget.language == 'ko' ? '저장' : 'Save'),
           ),
         ],
       ),

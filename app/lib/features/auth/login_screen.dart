@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/auth_service.dart';
+import '../../utils/error_messages.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -48,7 +50,16 @@ class _LoginScreenState extends State<LoginScreen> {
       // Navigation will be handled by auth state listener in main.dart
     } catch (e) {
       setState(() {
-        _errorMessage = e.toString();
+        // Detect language from system locale or default to English
+        final locale = Localizations.localeOf(context);
+        final isKorean = locale.languageCode == 'ko';
+        if (e is FirebaseAuthException) {
+          _errorMessage =
+              ErrorMessages.getAuthErrorMessage(e, isKorean: isKorean);
+        } else {
+          _errorMessage =
+              ErrorMessages.getApiErrorMessage(e, isKorean: isKorean);
+        }
         _isLoading = false;
       });
     }

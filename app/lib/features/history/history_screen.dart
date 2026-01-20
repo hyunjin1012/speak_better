@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../state/sessions_provider.dart';
+import '../../state/topics_provider.dart';
+import '../../models/topic.dart';
 import '../results/result_screen.dart';
 
 class HistoryScreen extends ConsumerStatefulWidget {
@@ -28,8 +30,19 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   @override
   Widget build(BuildContext context) {
     final sessions = ref.watch(sessionsProvider);
+    final topics = ref.watch(topicsProvider);
     final filteredSessions =
         sessions.where((s) => s.language == widget.language).toList();
+
+    // Helper function to get topic by ID
+    Topic? getTopicById(String? topicId) {
+      if (topicId == null) return null;
+      try {
+        return topics.firstWhere((t) => t.id == topicId);
+      } catch (e) {
+        return null;
+      }
+    }
 
     // Apply search filter
     final searchResults = _searchQuery.isEmpty
@@ -123,6 +136,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                     itemBuilder: (context, index) {
                       final session = searchResults[index];
                       final colorScheme = Theme.of(context).colorScheme;
+                      final topic = getTopicById(session.topicId);
                       return Card(
                         elevation: 2,
                         margin: const EdgeInsets.only(bottom: 12),
@@ -151,7 +165,9 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Icon(
-                                    Icons.mic,
+                                    topic?.isBuiltIn == true
+                                        ? Icons.star
+                                        : Icons.mic,
                                     color: colorScheme.primary,
                                   ),
                                 ),
@@ -161,6 +177,30 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
+                                      if (topic != null) ...[
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color:
+                                                colorScheme.secondaryContainer,
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                          ),
+                                          child: Text(
+                                            topic.title,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .labelSmall
+                                                ?.copyWith(
+                                                  color: colorScheme
+                                                      .onSecondaryContainer,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                      ],
                                       Text(
                                         session.transcript.length > 50
                                             ? '${session.transcript.substring(0, 50)}...'

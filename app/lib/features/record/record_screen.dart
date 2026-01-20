@@ -7,6 +7,7 @@ import 'package:path/path.dart' as path;
 import 'package:dio/dio.dart';
 import '../../api/speakbetter_api.dart';
 import '../../models/session.dart';
+import '../../utils/error_messages.dart';
 import 'dart:convert';
 import '../results/result_screen.dart';
 
@@ -200,10 +201,47 @@ class _RecordScreenState extends State<RecordScreen> {
       });
     } catch (e) {
       if (mounted) {
+        final errorMessage = ErrorMessages.getApiErrorMessage(
+          e,
+          isKorean: widget.language == 'ko',
+        );
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
         );
       }
+    }
+  }
+
+  Future<void> _cancelRecording() async {
+    try {
+      await _recorder.stop();
+      _cleanupAudioFile(_currentAudioPath);
+      setState(() {
+        _isRecording = false;
+        _recordingStartTime = null;
+        _currentAudioPath = null;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(widget.language == 'ko'
+                ? '녹음이 취소되었습니다'
+                : 'Recording cancelled'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      // Ignore errors when cancelling
+      setState(() {
+        _isRecording = false;
+        _recordingStartTime = null;
+        _currentAudioPath = null;
+      });
     }
   }
 
@@ -258,15 +296,17 @@ class _RecordScreenState extends State<RecordScreen> {
 
         setState(() => _isProcessing = false);
         if (mounted) {
-          final errorMessage = e is DioException && e.response?.data != null
-              ? '${e.response?.statusCode}: ${e.response?.data}'
-              : e.toString();
+          final errorMessage = ErrorMessages.getApiErrorMessage(
+            e,
+            isKorean: widget.language == 'ko',
+          );
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(widget.language == 'ko'
                   ? '전사 실패: $errorMessage'
                   : 'Transcription failed: $errorMessage'),
               duration: const Duration(seconds: 5),
+              backgroundColor: Colors.red,
             ),
           );
         }
@@ -324,15 +364,17 @@ class _RecordScreenState extends State<RecordScreen> {
 
         setState(() => _isProcessing = false);
         if (mounted) {
-          final errorMessage = e is DioException && e.response?.data != null
-              ? '${e.response?.statusCode}: ${e.response?.data}'
-              : e.toString();
+          final errorMessage = ErrorMessages.getApiErrorMessage(
+            e,
+            isKorean: widget.language == 'ko',
+          );
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(widget.language == 'ko'
                   ? '개선 실패: $errorMessage'
                   : 'Improvement failed: $errorMessage'),
               duration: const Duration(seconds: 5),
+              backgroundColor: Colors.orange,
             ),
           );
           // Still show results with transcript even if improvement failed
@@ -564,30 +606,63 @@ class _RecordScreenState extends State<RecordScreen> {
                       ],
                     ),
                   const SizedBox(height: 48),
-                  ElevatedButton.icon(
-                    onPressed: _isProcessing
-                        ? null
-                        : (_isRecording ? _stopAndProcess : _start),
-                    icon: Icon(
-                      _isRecording ? Icons.stop : Icons.mic,
-                      size: 24,
+                  if (_isRecording)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _isProcessing ? null : _cancelRecording,
+                            icon: const Icon(Icons.close),
+                            label: Text(
+                              isKorean ? '취소' : 'Cancel',
+                              style: const TextStyle(fontSize: 16),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 24, vertical: 18),
+                              side: BorderSide(color: colorScheme.outline),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _isProcessing ? null : _stopAndProcess,
+                            icon: const Icon(Icons.stop, size: 24),
+                            label: Text(
+                              isKorean ? '중지' : 'Stop',
+                              style: const TextStyle(
+                                  fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 32, vertical: 20),
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                              elevation: 8,
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    ElevatedButton.icon(
+                      onPressed: _isProcessing ? null : _start,
+                      icon: const Icon(Icons.mic, size: 24),
+                      label: Text(
+                        isKorean ? '녹음 시작' : 'Start Recording',
+                        style: const TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 32, vertical: 20),
+                        backgroundColor: colorScheme.primary,
+                        foregroundColor: Colors.white,
+                        elevation: 4,
+                      ),
                     ),
-                    label: Text(
-                      _isRecording
-                          ? (isKorean ? '중지' : 'Stop')
-                          : (isKorean ? '녹음 시작' : 'Start Recording'),
-                      style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 32, vertical: 20),
-                      backgroundColor:
-                          _isRecording ? Colors.red : colorScheme.primary,
-                      foregroundColor: Colors.white,
-                      elevation: _isRecording ? 8 : 4,
-                    ),
-                  ),
                 ],
               ),
             ),
