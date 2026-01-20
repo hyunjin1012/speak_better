@@ -36,35 +36,108 @@ class _TopicListScreenState extends ConsumerState<TopicListScreen> {
       ),
       body: filteredTopics.isEmpty
           ? Center(
-              child: Text(widget.language == 'ko' ? '주제가 없습니다' : 'No topics available'),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.topic,
+                    size: 64,
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    widget.language == 'ko' ? '주제가 없습니다' : 'No topics available',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                        ),
+                  ),
+                ],
+              ),
             )
           : ListView.builder(
+              padding: const EdgeInsets.all(16),
               itemCount: filteredTopics.length,
               itemBuilder: (context, index) {
                 final topic = filteredTopics[index];
-                return ListTile(
-                  title: Text(topic.title),
-                  subtitle: Text(topic.prompt),
-                  trailing: topic.isBuiltIn
-                      ? null
-                      : IconButton(
-                          icon: const Icon(Icons.delete),
-                          onPressed: () => _deleteTopic(context, topic.id),
+                final colorScheme = Theme.of(context).colorScheme;
+                return Card(
+                  elevation: 2,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => RecordScreen(
+                            language: widget.language,
+                            learnerMode: widget.learnerMode,
+                            topicId: topic.id,
+                            topicTitle: topic.title,
+                            topicPrompt: topic.prompt,
+                          ),
                         ),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => RecordScreen(
-                          language: widget.language,
-                          learnerMode: widget.learnerMode,
-                          topicId: topic.id,
-                          topicTitle: topic.title,
-                          topicPrompt: topic.prompt,
-                        ),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(16),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: colorScheme.primaryContainer,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              topic.isBuiltIn ? Icons.star : Icons.edit,
+                              color: colorScheme.primary,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  topic.title,
+                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                ),
+                                if (topic.prompt.isNotEmpty) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    topic.prompt,
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                          color: colorScheme.onSurface.withOpacity(0.7),
+                                        ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          if (!topic.isBuiltIn)
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline),
+                              color: Colors.red,
+                              onPressed: () => _deleteTopic(context, topic.id),
+                            )
+                          else
+                            Icon(
+                              Icons.arrow_forward_ios,
+                              size: 16,
+                              color: colorScheme.onSurface.withOpacity(0.5),
+                            ),
+                        ],
                       ),
-                    );
-                  },
+                    ),
+                  ),
                 );
               },
             ),

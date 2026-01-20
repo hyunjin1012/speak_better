@@ -1,16 +1,15 @@
-# app
+# Speak Better - Flutter App
 
-A new Flutter project.
+Flutter mobile application for Korean/English language learning practice.
 
-## Getting Started
+## Features
 
-This project is a starting point for a Flutter application.
+- Audio recording and transcription
+- AI-powered text improvement and feedback
+- Practice session history
+- Custom topics
+- Progress tracking
+- Flashcards with spaced repetition
+- Achievements and streaks
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+See the main [README.md](../README.md) for setup instructions.

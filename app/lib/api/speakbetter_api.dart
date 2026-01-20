@@ -60,7 +60,16 @@ class SpeakBetterApi {
       'audio': await MultipartFile.fromFile(filePath, filename: filename),
     });
 
-    final res = await _dio.post('/v1/transcribe', data: form);
+    // Set longer timeout for transcription (audio processing can take time)
+    final res = await _dio.post(
+      '/v1/transcribe',
+      data: form,
+      options: Options(
+        receiveTimeout:
+            const Duration(minutes: 5), // 5 minutes for transcription
+        sendTimeout: const Duration(minutes: 2), // 2 minutes for upload
+      ),
+    );
     return Map<String, dynamic>.from(res.data as Map);
   }
 

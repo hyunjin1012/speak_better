@@ -36,6 +36,8 @@ class _RecordScreenState extends State<RecordScreen> {
 
   bool _isRecording = false;
   bool _isProcessing = false;
+  DateTime? _recordingStartTime;
+  String? _currentAudioPath;
 
   @override
   void initState() {
@@ -172,9 +174,15 @@ class _RecordScreenState extends State<RecordScreen> {
 
     // Permission is granted - proceed with recording
     try {
-      final tempDir = await getTemporaryDirectory();
+      // Use documents directory for permanent storage
+      final appDocDir = await getApplicationDocumentsDirectory();
+      final recordingsDir = Directory(path.join(appDocDir.path, 'recordings'));
+      if (!await recordingsDir.exists()) {
+        await recordingsDir.create(recursive: true);
+      }
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final audioPath = path.join(tempDir.path, 'recording_$timestamp.m4a');
+      final audioPath =
+          path.join(recordingsDir.path, 'recording_$timestamp.m4a');
 
       await _recorder.start(
         const RecordConfig(
@@ -185,7 +193,11 @@ class _RecordScreenState extends State<RecordScreen> {
         path: audioPath,
       );
 
-      setState(() => _isRecording = true);
+      setState(() {
+        _isRecording = true;
+        _recordingStartTime = DateTime.now();
+        _currentAudioPath = audioPath;
+      });
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -196,16 +208,25 @@ class _RecordScreenState extends State<RecordScreen> {
   }
 
   Future<void> _stopAndProcess() async {
+    String? audioPath;
+    String? transcript;
+    PracticeSession? session;
     try {
-      final path = await _recorder.stop();
-      setState(() => _isRecording = false);
+      audioPath = await _recorder.stop();
+      setState(() {
+        _isRecording = false;
+        _recordingStartTime = null;
+      });
 
-      if (path == null) return;
-      final file = File(path);
+      if (audioPath == null) {
+        _cleanupAudioFile(_currentAudioPath);
+        return;
+      }
+      final file = File(audioPath);
 
       // Debug: log the file path and extension
-      print('Recording file path: $path');
-      print('File extension: ${path.split('.').last}');
+      print('Recording file path: $audioPath');
+      print('File extension: ${audioPath.split('.').last}');
       print('File exists: ${await file.exists()}');
 
       setState(() {
@@ -249,10 +270,28 @@ class _RecordScreenState extends State<RecordScreen> {
             ),
           );
         }
+        _cleanupAudioFile(audioPath);
         return;
       }
 
-      final transcript = (t['transcript'] ?? '') as String;
+      transcript = (t['transcript'] ?? '') as String;
+
+      // Ensure audio file exists and is accessible
+      if (!await file.exists()) {
+        throw Exception('Audio file was deleted before saving session');
+      }
+
+      // Save session immediately with transcript (even if improvement fails)
+      // Use absolute path to ensure file can be found later
+      final absoluteAudioPath = file.absolute.path;
+      session = PracticeSession(
+        language: widget.language,
+        learnerMode: widget.learnerMode,
+        topicId: widget.topicId,
+        audioPath: absoluteAudioPath,
+        transcript: transcript,
+        improveJson: '', // Will be updated after improvement
+      );
 
       // Improve
       Map<String, dynamic> improved;
@@ -296,33 +335,45 @@ class _RecordScreenState extends State<RecordScreen> {
               duration: const Duration(seconds: 5),
             ),
           );
+          // Still show results with transcript even if improvement failed
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ResultScreen(session: session!),
+            ),
+          );
+        } else {
+          _cleanupAudioFile(audioPath);
         }
         return;
       }
+
+      // Update session with improvement data
+      // Preserve the absolute audio path
+      final updatedSession = PracticeSession(
+        id: session.id,
+        language: session.language,
+        learnerMode: session.learnerMode,
+        topicId: session.topicId,
+        audioPath: session.audioPath, // Already absolute path
+        transcript: session.transcript,
+        improveJson: jsonEncode(improved),
+        createdAt: session.createdAt,
+      );
 
       setState(() {
         _isProcessing = false;
       });
 
-      // Save session
-      final session = PracticeSession(
-        language: widget.language,
-        learnerMode: widget.learnerMode,
-        topicId: widget.topicId,
-        audioPath: file.path,
-        transcript: transcript,
-        improveJson: jsonEncode(improved),
-      );
-
-      // Save to local store (you'll need to access the provider)
-      // For now, we'll pass it to the result screen
-
-      if (!mounted) return;
+      if (!mounted) {
+        // Don't cleanup audio file - it's saved in the session
+        return;
+      }
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (context) => ResultScreen(
-            session: session,
+            session: updatedSession,
           ),
         ),
       );
@@ -332,6 +383,33 @@ class _RecordScreenState extends State<RecordScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e')),
         );
+        // If we have a session with transcript, still navigate to results
+        if (session != null && transcript != null && transcript.isNotEmpty) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ResultScreen(session: session!),
+            ),
+          );
+        } else {
+          _cleanupAudioFile(audioPath);
+        }
+      } else {
+        _cleanupAudioFile(audioPath);
+      }
+    }
+  }
+
+  void _cleanupAudioFile(String? path) {
+    if (path != null) {
+      try {
+        final file = File(path);
+        if (file.existsSync()) {
+          file.deleteSync();
+        }
+      } catch (e) {
+        // Ignore cleanup errors
+        print('Failed to cleanup audio file: $e');
       }
     }
   }
@@ -344,64 +422,176 @@ class _RecordScreenState extends State<RecordScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isKorean = widget.language == 'ko';
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.language == 'ko' ? '녹음하기' : 'Record'),
+        title: Text(isKorean ? '녹음하기' : 'Record'),
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (widget.topicTitle != null) ...[
-              Text(
-                widget.topicTitle!,
-                style: Theme.of(context).textTheme.headlineSmall,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                child: Text(
-                  widget.topicPrompt ?? '',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              const SizedBox(height: 32),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              colorScheme.primaryContainer.withOpacity(0.3),
+              colorScheme.surface,
             ],
-            if (_isProcessing)
-              const CircularProgressIndicator()
-            else
-              Icon(
-                _isRecording ? Icons.mic : Icons.mic_none,
-                size: 64,
-                color: _isRecording ? Colors.red : Colors.grey,
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (widget.topicTitle != null) ...[
+                    Card(
+                      elevation: 4,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          children: [
+                            Text(
+                              widget.topicTitle!,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .headlineSmall
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                              textAlign: TextAlign.center,
+                            ),
+                            if (widget.topicPrompt != null &&
+                                widget.topicPrompt!.isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              Text(
+                                widget.topicPrompt!,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                      color: colorScheme.onSurface
+                                          .withOpacity(0.7),
+                                    ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 48),
+                  ],
+                  if (_isProcessing)
+                    Column(
+                      children: [
+                        const CircularProgressIndicator(),
+                        const SizedBox(height: 24),
+                        Text(
+                          isKorean ? '처리 중...' : 'Processing...',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                      ],
+                    )
+                  else
+                    Column(
+                      children: [
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          padding: EdgeInsets.all(_isRecording ? 20 : 24),
+                          decoration: BoxDecoration(
+                            color: _isRecording
+                                ? Colors.red.withOpacity(0.1)
+                                : colorScheme.primaryContainer.withOpacity(0.3),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            _isRecording ? Icons.mic : Icons.mic_none,
+                            size: _isRecording ? 80 : 64,
+                            color:
+                                _isRecording ? Colors.red : colorScheme.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Text(
+                          _isRecording
+                              ? (isKorean ? '녹음 중...' : 'Recording...')
+                              : (isKorean ? '준비됨' : 'Ready'),
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineSmall
+                              ?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                        ),
+                        if (_isRecording && _recordingStartTime != null) ...[
+                          const SizedBox(height: 16),
+                          StreamBuilder<DateTime>(
+                            stream: Stream.periodic(const Duration(seconds: 1),
+                                (_) => DateTime.now()),
+                            builder: (context, snapshot) {
+                              final duration = DateTime.now()
+                                  .difference(_recordingStartTime!);
+                              final minutes = duration.inMinutes;
+                              final seconds = duration.inSeconds % 60;
+                              return Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 24, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineMedium
+                                      ?.copyWith(
+                                        color: Colors.red,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ],
+                    ),
+                  const SizedBox(height: 48),
+                  ElevatedButton.icon(
+                    onPressed: _isProcessing
+                        ? null
+                        : (_isRecording ? _stopAndProcess : _start),
+                    icon: Icon(
+                      _isRecording ? Icons.stop : Icons.mic,
+                      size: 24,
+                    ),
+                    label: Text(
+                      _isRecording
+                          ? (isKorean ? '중지' : 'Stop')
+                          : (isKorean ? '녹음 시작' : 'Start Recording'),
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 32, vertical: 20),
+                      backgroundColor:
+                          _isRecording ? Colors.red : colorScheme.primary,
+                      foregroundColor: Colors.white,
+                      elevation: _isRecording ? 8 : 4,
+                    ),
+                  ),
+                ],
               ),
-            const SizedBox(height: 16),
-            Text(
-              _isRecording
-                  ? (widget.language == 'ko' ? '녹음 중...' : 'Recording...')
-                  : (widget.language == 'ko' ? '준비됨' : 'Ready'),
-              style: Theme.of(context).textTheme.titleLarge,
             ),
-            const SizedBox(height: 32),
-            ElevatedButton(
-              onPressed: _isProcessing
-                  ? null
-                  : (_isRecording ? _stopAndProcess : _start),
-              style: ElevatedButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                backgroundColor: _isRecording ? Colors.red : Colors.blue,
-              ),
-              child: Text(
-                _isRecording
-                    ? (widget.language == 'ko' ? '중지' : 'Stop')
-                    : (widget.language == 'ko' ? '녹음 시작' : 'Start Recording'),
-                style: const TextStyle(fontSize: 18),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
