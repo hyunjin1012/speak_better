@@ -152,55 +152,18 @@ improveRouter.post("/", upload.single("image"), async (req, res) => {
     console.log("Learner mode:", parsed.learnerMode);
     console.log("Has image:", !!imageFile);
     
-    // Analyze image if provided
-    let imageDescription = "";
+    // Prepare image data if provided (for direct viewing by AI)
+    let imageData: { base64: string; mimeType: string } | null = null;
     if (imageFile) {
       try {
         const imageBuffer = fs.readFileSync(imageFile.path);
         const base64Image = imageBuffer.toString("base64");
         const mimeType = imageFile.mimetype || "image/jpeg";
-
-        const visionResponse = await openai.chat.completions.create({
-          model: "gpt-4o-mini",
-          messages: [
-            {
-              role: "system",
-              content: parsed.language === "ko"
-                ? "이미지를 분석하고 간단하게 설명하는 도우미입니다."
-                : "You are a helper that analyzes and briefly describes images.",
-            },
-            {
-              role: "user",
-              content: [
-                {
-                  type: "text",
-                  text: parsed.language === "ko"
-                    ? "이 이미지에 무엇이 있는지 간단히 설명해주세요."
-                    : "Briefly describe what's in this image.",
-                },
-                {
-                  type: "image_url",
-                  image_url: {
-                    url: `data:${mimeType};base64,${base64Image}`,
-                  },
-                },
-              ],
-            },
-          ],
-          max_tokens: 300,
-        });
-
-        imageDescription = visionResponse.choices[0]?.message?.content || "";
-        
-        // Clean up image file
-        try {
-          fs.unlinkSync(imageFile.path);
-        } catch (e) {
-          console.error("Failed to delete image file:", e);
-        }
+        imageData = { base64: base64Image, mimeType };
+        console.log("Image prepared for AI viewing");
       } catch (e) {
-        console.error("Image analysis error:", e);
-        // Continue without image description if analysis fails
+        console.error("Failed to prepare image:", e);
+        // Continue without image if preparation fails
       }
     }
     
@@ -212,15 +175,36 @@ improveRouter.post("/", upload.single("image"), async (req, res) => {
       transcript: parsed.transcript,
       tone: parsed.preferences?.tone,
       length: parsed.preferences?.length,
-      imageDescription: imageDescription || undefined,
+      imageDescription: imageData ? "Image provided - AI can see the image directly" : undefined,
     });
 
+    // Build user message content - include image if available
+    const userContent: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
+      {
+        type: "text",
+        text: parsed.language === "ko"
+          ? `다음은 사용자가 이미지에 대해 말한 내용입니다. 이미지를 직접 보고 정확하게 평가해주세요:\n\n"${parsed.transcript}"`
+          : `The following is what the user said about the image. Please view the image directly and evaluate accurately:\n\n"${parsed.transcript}"`,
+      },
+    ];
+
+    // Add image if available
+    if (imageData) {
+      userContent.push({
+        type: "image_url",
+        image_url: {
+          url: `data:${imageData.mimeType};base64,${imageData.base64}`,
+        },
+      });
+    }
+
     // Using Chat Completions API with structured outputs (JSON mode)
+    // GPT-4o-mini can see images directly
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         { role: "system", content: instructions },
-        { role: "user", content: `Transcript to improve: "${parsed.transcript}"` },
+        { role: "user", content: userContent },
       ],
       response_format: {
         type: "json_schema",
@@ -317,8 +301,26 @@ improveRouter.post("/", upload.single("image"), async (req, res) => {
     }
 
     const validated = ImproveResultSchema.parse(json);
+    
+    // Clean up image file after processing
+    if (imageFile) {
+      try {
+        fs.unlinkSync(imageFile.path);
+      } catch (e) {
+        console.error("Failed to delete image file:", e);
+      }
+    }
+    
     return res.json(validated);
   } catch (err: any) {
+    // Clean up image file on error too
+    if (imageFile) {
+      try {
+        fs.unlinkSync(imageFile.path);
+      } catch (e) {
+        console.error("Failed to delete image file on error:", e);
+      }
+    }
     console.error("=== IMPROVE ERROR ===");
     console.error("Error:", err);
     console.error("Error name:", err?.name);
