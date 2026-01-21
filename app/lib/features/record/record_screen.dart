@@ -333,11 +333,39 @@ class _RecordScreenState extends State<RecordScreen> {
       // Save session immediately with transcript (even if improvement fails)
       // Use absolute path to ensure file can be found later
       final absoluteAudioPath = file.absolute.path;
+
+      // Save image to permanent storage if present
+      String? absoluteImagePath;
+      if (_selectedImage != null) {
+        try {
+          final appDocDir = await getApplicationDocumentsDirectory();
+          final imagesDir = Directory(path.join(appDocDir.path, 'images'));
+          if (!await imagesDir.exists()) {
+            await imagesDir.create(recursive: true);
+          }
+          final timestamp = DateTime.now().millisecondsSinceEpoch;
+          final imageExtension =
+              _selectedImage!.path.split('.').last.toLowerCase();
+          final savedImagePath = path.join(
+            imagesDir.path,
+            'image_$timestamp.$imageExtension',
+          );
+
+          // Copy image to permanent location
+          await _selectedImage!.copy(savedImagePath);
+          absoluteImagePath = File(savedImagePath).absolute.path;
+        } catch (e) {
+          print('Failed to save image: $e');
+          // Continue without image if save fails
+        }
+      }
+
       session = PracticeSession(
         language: widget.language,
         learnerMode: widget.learnerMode,
         topicId: widget.topicId,
         audioPath: absoluteAudioPath,
+        imagePath: absoluteImagePath,
         transcript: transcript,
         improveJson: '', // Will be updated after improvement
       );
@@ -403,13 +431,14 @@ class _RecordScreenState extends State<RecordScreen> {
       }
 
       // Update session with improvement data
-      // Preserve the absolute audio path
+      // Preserve the absolute audio and image paths
       final updatedSession = PracticeSession(
         id: session.id,
         language: session.language,
         learnerMode: session.learnerMode,
         topicId: session.topicId,
         audioPath: session.audioPath, // Already absolute path
+        imagePath: session.imagePath, // Already absolute path
         transcript: session.transcript,
         improveJson: jsonEncode(improved),
         createdAt: session.createdAt,
@@ -525,304 +554,565 @@ class _RecordScreenState extends State<RecordScreen> {
           ),
         ),
         child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Display image if selected (always visible, even during recording)
-                  if (_selectedImage != null) ...[
-                    Container(
-                      height: _isRecording ? 300 : 250,
-                      width: double.infinity,
-                      margin: const EdgeInsets.symmetric(horizontal: 8),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: _isRecording
-                              ? Colors.red.withOpacity(0.5)
-                              : colorScheme.outline,
-                          width: _isRecording ? 2 : 1,
-                        ),
-                        boxShadow: _isRecording
-                            ? [
-                                BoxShadow(
-                                  color: Colors.red.withOpacity(0.2),
-                                  blurRadius: 8,
-                                  spreadRadius: 2,
-                                ),
-                              ]
-                            : [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.1),
-                                  blurRadius: 4,
-                                  spreadRadius: 1,
-                                ),
-                              ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: Stack(
+          child: _isRecording && _selectedImage != null
+              ? Column(
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.start,
                           children: [
-                            Image.file(
-                              _selectedImage!,
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                              height: double.infinity,
-                            ),
-                            if (!_isRecording && !_isProcessing)
-                              Positioned(
-                                top: 8,
-                                right: 8,
-                                child: IconButton(
-                                  icon: const Icon(Icons.close,
-                                      color: Colors.white),
-                                  onPressed: () {
-                                    setState(() {
-                                      _selectedImage = null;
-                                    });
-                                  },
-                                  style: IconButton.styleFrom(
-                                    backgroundColor: Colors.black54,
+                            // Display image if selected (always visible, even during recording)
+                            if (_selectedImage != null) ...[
+                              Container(
+                                height: 180,
+                                width: double.infinity,
+                                margin:
+                                    const EdgeInsets.symmetric(horizontal: 8),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: Colors.red.withOpacity(0.5),
+                                    width: 2,
                                   ),
-                                  tooltip: isKorean ? '이미지 제거' : 'Remove Image',
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.red.withOpacity(0.2),
+                                      blurRadius: 8,
+                                      spreadRadius: 2,
+                                    ),
+                                  ],
                                 ),
-                              ),
-                            if (_isRecording)
-                              Positioned(
-                                bottom: 8,
-                                left: 8,
-                                right: 8,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.red.withOpacity(0.9),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    mainAxisAlignment: MainAxisAlignment.center,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Stack(
                                     children: [
-                                      const Icon(Icons.mic,
-                                          color: Colors.white, size: 18),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        isKorean
-                                            ? '이 사진에 대해 말해주세요'
-                                            : 'Describe this image',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 13,
+                                      Image.file(
+                                        _selectedImage!,
+                                        fit: BoxFit.cover,
+                                        width: double.infinity,
+                                        height: double.infinity,
+                                      ),
+                                      Positioned(
+                                        bottom: 8,
+                                        left: 8,
+                                        right: 8,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 12, vertical: 8),
+                                          decoration: BoxDecoration(
+                                            color: Colors.red.withOpacity(0.9),
+                                            borderRadius:
+                                                BorderRadius.circular(20),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              const Icon(Icons.mic,
+                                                  color: Colors.white,
+                                                  size: 18),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                isKorean
+                                                    ? '이 사진에 대해 말해주세요'
+                                                    : 'Describe this image',
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 13,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
                               ),
+                              const SizedBox(height: 24),
+                            ],
+                            if (widget.topicTitle != null) ...[
+                              Card(
+                                elevation: 4,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(20),
+                                  child: Column(
+                                    children: [
+                                      Text(
+                                        widget.topicTitle!,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .headlineSmall
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                      if (widget.topicPrompt != null &&
+                                          widget.topicPrompt!.isNotEmpty) ...[
+                                        const SizedBox(height: 12),
+                                        Text(
+                                          widget.topicPrompt!,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(
+                                                color: colorScheme.onSurface
+                                                    .withOpacity(0.7),
+                                              ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                            ],
+                            Column(
+                              children: [
+                                AnimatedContainer(
+                                  duration: const Duration(milliseconds: 300),
+                                  padding: const EdgeInsets.all(20),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.withOpacity(0.1),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.mic,
+                                    size: 80,
+                                    color: Colors.red,
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                Text(
+                                  isKorean ? '녹음 중...' : 'Recording...',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineSmall
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                ),
+                                if (_isRecording &&
+                                    _recordingStartTime != null) ...[
+                                  const SizedBox(height: 16),
+                                  StreamBuilder<DateTime>(
+                                    stream: Stream.periodic(
+                                        const Duration(seconds: 1),
+                                        (_) => DateTime.now()),
+                                    builder: (context, snapshot) {
+                                      final duration = DateTime.now()
+                                          .difference(_recordingStartTime!);
+                                      final minutes = duration.inMinutes;
+                                      final seconds = duration.inSeconds % 60;
+                                      return Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 24, vertical: 12),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red.withOpacity(0.1),
+                                          borderRadius:
+                                              BorderRadius.circular(20),
+                                        ),
+                                        child: Text(
+                                          '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .headlineMedium
+                                              ?.copyWith(
+                                                color: Colors.red,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ],
+                            ),
                           ],
                         ),
                       ),
                     ),
-                    const SizedBox(height: 24),
-                  ],
-                  if (widget.topicTitle != null) ...[
-                    Card(
-                      elevation: 4,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                    // Fixed buttons at bottom when recording
+                    Container(
+                      padding: const EdgeInsets.all(24.0),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surface,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 4,
+                            offset: const Offset(0, -2),
+                          ),
+                        ],
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
+                      child: SafeArea(
+                        top: false,
+                        child: Row(
                           children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed:
+                                    _isProcessing ? null : _cancelRecording,
+                                icon: const Icon(Icons.close),
+                                label: Text(
+                                  isKorean ? '취소' : 'Cancel',
+                                  style: const TextStyle(fontSize: 16),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 24, vertical: 18),
+                                  side: BorderSide(color: colorScheme.outline),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed:
+                                    _isProcessing ? null : _stopAndProcess,
+                                icon: const Icon(Icons.stop, size: 24),
+                                label: Text(
+                                  isKorean ? '중지' : 'Stop',
+                                  style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 32, vertical: 20),
+                                  backgroundColor: Colors.red,
+                                  foregroundColor: Colors.white,
+                                  elevation: 8,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: [
+                      // Display image if selected (always visible, even during recording)
+                      if (_selectedImage != null) ...[
+                        Container(
+                          height: _isRecording ? 250 : 200,
+                          width: double.infinity,
+                          margin: const EdgeInsets.symmetric(horizontal: 8),
+                          constraints: BoxConstraints(
+                            maxHeight:
+                                MediaQuery.of(context).size.height * 0.35,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: _isRecording
+                                  ? Colors.red.withOpacity(0.5)
+                                  : colorScheme.outline,
+                              width: _isRecording ? 2 : 1,
+                            ),
+                            boxShadow: _isRecording
+                                ? [
+                                    BoxShadow(
+                                      color: Colors.red.withOpacity(0.2),
+                                      blurRadius: 8,
+                                      spreadRadius: 2,
+                                    ),
+                                  ]
+                                : [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.1),
+                                      blurRadius: 4,
+                                      spreadRadius: 1,
+                                    ),
+                                  ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: Stack(
+                              children: [
+                                Image.file(
+                                  _selectedImage!,
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                  height: double.infinity,
+                                ),
+                                if (!_isRecording && !_isProcessing)
+                                  Positioned(
+                                    top: 8,
+                                    right: 8,
+                                    child: IconButton(
+                                      icon: const Icon(Icons.close,
+                                          color: Colors.white),
+                                      onPressed: () {
+                                        setState(() {
+                                          _selectedImage = null;
+                                        });
+                                      },
+                                      style: IconButton.styleFrom(
+                                        backgroundColor: Colors.black54,
+                                      ),
+                                      tooltip:
+                                          isKorean ? '이미지 제거' : 'Remove Image',
+                                    ),
+                                  ),
+                                if (_isRecording)
+                                  Positioned(
+                                    bottom: 8,
+                                    left: 8,
+                                    right: 8,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red.withOpacity(0.9),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          const Icon(Icons.mic,
+                                              color: Colors.white, size: 18),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            isKorean
+                                                ? '이 사진에 대해 말해주세요'
+                                                : 'Describe this image',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
+                      if (widget.topicTitle != null) ...[
+                        Card(
+                          elevation: 4,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Column(
+                              children: [
+                                Text(
+                                  widget.topicTitle!,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineSmall
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                  textAlign: TextAlign.center,
+                                ),
+                                if (widget.topicPrompt != null &&
+                                    widget.topicPrompt!.isNotEmpty) ...[
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    widget.topicPrompt!,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          color: colorScheme.onSurface
+                                              .withOpacity(0.7),
+                                        ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 48),
+                      ],
+                      // Image selection button (only when not recording and no image selected)
+                      if (!_isRecording &&
+                          !_isProcessing &&
+                          _selectedImage == null) ...[
+                        OutlinedButton.icon(
+                          onPressed: () => _pickImage(ImageSource.gallery),
+                          icon: const Icon(Icons.image),
+                          label: Text(
+                            isKorean ? '이미지 선택' : 'Select Image',
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 24, vertical: 16),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
+                      if (_isProcessing)
+                        Column(
+                          children: [
+                            const CircularProgressIndicator(),
+                            const SizedBox(height: 24),
                             Text(
-                              widget.topicTitle!,
+                              isKorean ? '처리 중...' : 'Processing...',
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                          ],
+                        )
+                      else
+                        Column(
+                          children: [
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              padding: EdgeInsets.all(_isRecording ? 20 : 24),
+                              decoration: BoxDecoration(
+                                color: _isRecording
+                                    ? Colors.red.withOpacity(0.1)
+                                    : colorScheme.primaryContainer
+                                        .withOpacity(0.3),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                _isRecording ? Icons.mic : Icons.mic_none,
+                                size: _isRecording ? 80 : 64,
+                                color: _isRecording
+                                    ? Colors.red
+                                    : colorScheme.primary,
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            Text(
+                              _isRecording
+                                  ? (isKorean ? '녹음 중...' : 'Recording...')
+                                  : (isKorean ? '준비됨' : 'Ready'),
                               style: Theme.of(context)
                                   .textTheme
                                   .headlineSmall
                                   ?.copyWith(
                                     fontWeight: FontWeight.bold,
                                   ),
-                              textAlign: TextAlign.center,
                             ),
-                            if (widget.topicPrompt != null &&
-                                widget.topicPrompt!.isNotEmpty) ...[
-                              const SizedBox(height: 12),
-                              Text(
-                                widget.topicPrompt!,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                      color: colorScheme.onSurface
-                                          .withOpacity(0.7),
+                            if (_isRecording &&
+                                _recordingStartTime != null) ...[
+                              const SizedBox(height: 16),
+                              StreamBuilder<DateTime>(
+                                stream: Stream.periodic(
+                                    const Duration(seconds: 1),
+                                    (_) => DateTime.now()),
+                                builder: (context, snapshot) {
+                                  final duration = DateTime.now()
+                                      .difference(_recordingStartTime!);
+                                  final minutes = duration.inMinutes;
+                                  final seconds = duration.inSeconds % 60;
+                                  return Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 24, vertical: 12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(20),
                                     ),
-                                textAlign: TextAlign.center,
+                                    child: Text(
+                                      '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .headlineMedium
+                                          ?.copyWith(
+                                            color: Colors.red,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                    ),
+                                  );
+                                },
                               ),
                             ],
                           ],
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 48),
-                  ],
-                  // Image selection button (only when not recording and no image selected)
-                  if (!_isRecording &&
-                      !_isProcessing &&
-                      _selectedImage == null) ...[
-                    OutlinedButton.icon(
-                      onPressed: () => _pickImage(ImageSource.gallery),
-                      icon: const Icon(Icons.image),
-                      label: Text(
-                        isKorean ? '이미지 선택' : 'Select Image',
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 24, vertical: 16),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
-                  if (_isProcessing)
-                    Column(
-                      children: [
-                        const CircularProgressIndicator(),
-                        const SizedBox(height: 24),
-                        Text(
-                          isKorean ? '처리 중...' : 'Processing...',
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                      ],
-                    )
-                  else
-                    Column(
-                      children: [
-                        AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
-                          padding: EdgeInsets.all(_isRecording ? 20 : 24),
-                          decoration: BoxDecoration(
-                            color: _isRecording
-                                ? Colors.red.withOpacity(0.1)
-                                : colorScheme.primaryContainer.withOpacity(0.3),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            _isRecording ? Icons.mic : Icons.mic_none,
-                            size: _isRecording ? 80 : 64,
-                            color:
-                                _isRecording ? Colors.red : colorScheme.primary,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        Text(
-                          _isRecording
-                              ? (isKorean ? '녹음 중...' : 'Recording...')
-                              : (isKorean ? '준비됨' : 'Ready'),
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineSmall
-                              ?.copyWith(
-                                fontWeight: FontWeight.bold,
+                      const SizedBox(height: 48),
+                      if (_isRecording)
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed:
+                                    _isProcessing ? null : _cancelRecording,
+                                icon: const Icon(Icons.close),
+                                label: Text(
+                                  isKorean ? '취소' : 'Cancel',
+                                  style: const TextStyle(fontSize: 16),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 24, vertical: 18),
+                                  side: BorderSide(color: colorScheme.outline),
+                                ),
                               ),
-                        ),
-                        if (_isRecording && _recordingStartTime != null) ...[
-                          const SizedBox(height: 16),
-                          StreamBuilder<DateTime>(
-                            stream: Stream.periodic(const Duration(seconds: 1),
-                                (_) => DateTime.now()),
-                            builder: (context, snapshot) {
-                              final duration = DateTime.now()
-                                  .difference(_recordingStartTime!);
-                              final minutes = duration.inMinutes;
-                              final seconds = duration.inSeconds % 60;
-                              return Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 24, vertical: 12),
-                                decoration: BoxDecoration(
-                                  color: Colors.red.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(20),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed:
+                                    _isProcessing ? null : _stopAndProcess,
+                                icon: const Icon(Icons.stop, size: 24),
+                                label: Text(
+                                  isKorean ? '중지' : 'Stop',
+                                  style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold),
                                 ),
-                                child: Text(
-                                  '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .headlineMedium
-                                      ?.copyWith(
-                                        color: Colors.red,
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 32, vertical: 20),
+                                  backgroundColor: Colors.red,
+                                  foregroundColor: Colors.white,
+                                  elevation: 8,
                                 ),
-                              );
-                            },
+                              ),
+                            ),
+                          ],
+                        )
+                      else
+                        ElevatedButton.icon(
+                          onPressed: _isProcessing ? null : _start,
+                          icon: const Icon(Icons.mic, size: 24),
+                          label: Text(
+                            isKorean ? '녹음 시작' : 'Start Recording',
+                            style: const TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold),
                           ),
-                        ],
-                      ],
-                    ),
-                  const SizedBox(height: 48),
-                  if (_isRecording)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: _isProcessing ? null : _cancelRecording,
-                            icon: const Icon(Icons.close),
-                            label: Text(
-                              isKorean ? '취소' : 'Cancel',
-                              style: const TextStyle(fontSize: 16),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 24, vertical: 18),
-                              side: BorderSide(color: colorScheme.outline),
-                            ),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 32, vertical: 20),
+                            backgroundColor: colorScheme.primary,
+                            foregroundColor: Colors.white,
+                            elevation: 4,
                           ),
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: _isProcessing ? null : _stopAndProcess,
-                            icon: const Icon(Icons.stop, size: 24),
-                            label: Text(
-                              isKorean ? '중지' : 'Stop',
-                              style: const TextStyle(
-                                  fontSize: 18, fontWeight: FontWeight.bold),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 32, vertical: 20),
-                              backgroundColor: Colors.red,
-                              foregroundColor: Colors.white,
-                              elevation: 8,
-                            ),
-                          ),
-                        ),
-                      ],
-                    )
-                  else
-                    ElevatedButton.icon(
-                      onPressed: _isProcessing ? null : _start,
-                      icon: const Icon(Icons.mic, size: 24),
-                      label: Text(
-                        isKorean ? '녹음 시작' : 'Start Recording',
-                        style: const TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 32, vertical: 20),
-                        backgroundColor: colorScheme.primary,
-                        foregroundColor: Colors.white,
-                        elevation: 4,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
+                      // Add bottom padding to ensure button is visible
+                      SizedBox(
+                          height: MediaQuery.of(context).size.height * 0.1),
+                    ],
+                  ),
+                ),
         ),
       ),
     );

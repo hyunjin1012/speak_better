@@ -8,6 +8,7 @@ class PracticeSession {
     required this.learnerMode, // 'korean_learner' or 'english_learner'
     this.topicId,
     this.audioPath,
+    this.imagePath, // Path to saved image file
     required this.transcript,
     required this.improveJson, // store raw JSON map as string
     DateTime? createdAt,
@@ -19,6 +20,7 @@ class PracticeSession {
   final String learnerMode;
   final String? topicId;
   final String? audioPath;
+  final String? imagePath;
   final String transcript;
   final String improveJson;
   final DateTime createdAt;
@@ -31,6 +33,7 @@ class PracticeSession {
         'learnerMode': learnerMode,
         'topicId': topicId,
         'audioPath': audioPath,
+        'imagePath': imagePath,
         'transcript': transcript,
         'improveJson': improveJson,
         'createdAt': createdAt.toIso8601String(),
@@ -42,6 +45,7 @@ class PracticeSession {
         learnerMode: json['learnerMode'] as String,
         topicId: json['topicId'] as String?,
         audioPath: json['audioPath'] as String?,
+        imagePath: json['imagePath'] as String?,
         transcript: json['transcript'] as String,
         improveJson: json['improveJson'] as String,
         createdAt: DateTime.parse(json['createdAt'] as String),

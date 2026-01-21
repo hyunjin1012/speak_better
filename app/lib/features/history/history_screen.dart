@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../state/sessions_provider.dart';
@@ -158,19 +159,48 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                             padding: const EdgeInsets.all(16),
                             child: Row(
                               children: [
-                                Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: colorScheme.primaryContainer,
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Icon(
-                                    topic?.isBuiltIn == true
-                                        ? Icons.star
-                                        : Icons.mic,
-                                    color: colorScheme.primary,
-                                  ),
-                                ),
+                                // Show image thumbnail if available, otherwise show icon
+                                session.imagePath != null
+                                    ? ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: Image.file(
+                                          File(session.imagePath!),
+                                          width: 56,
+                                          height: 56,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (context, error, stackTrace) {
+                                            // Fallback to icon if image fails to load
+                                            return Container(
+                                              width: 56,
+                                              height: 56,
+                                              padding: const EdgeInsets.all(12),
+                                              decoration: BoxDecoration(
+                                                color: colorScheme.primaryContainer,
+                                                borderRadius: BorderRadius.circular(12),
+                                              ),
+                                              child: Icon(
+                                                topic?.isBuiltIn == true
+                                                    ? Icons.star
+                                                    : Icons.mic,
+                                                color: colorScheme.primary,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      )
+                                    : Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: colorScheme.primaryContainer,
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: Icon(
+                                          topic?.isBuiltIn == true
+                                              ? Icons.star
+                                              : Icons.mic,
+                                          color: colorScheme.primary,
+                                        ),
+                                      ),
                                 const SizedBox(width: 16),
                                 Expanded(
                                   child: Column(

@@ -35,11 +35,23 @@ class _ResultScreenState extends ConsumerState<ResultScreen>
   bool _isPlaying = false;
   Duration _duration = Duration.zero;
   Duration _position = Duration.zero;
+  File? _imageFile;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    
+    // Load image from session if available, otherwise use provided imageFile
+    if (widget.session.imagePath != null) {
+      final imageFile = File(widget.session.imagePath!);
+      if (imageFile.existsSync()) {
+        _imageFile = imageFile;
+      }
+    } else if (widget.imageFile != null) {
+      _imageFile = widget.imageFile;
+    }
+    
     try {
       _result = ImproveResult.fromJson(widget.session.improveData);
     } catch (e) {
@@ -437,7 +449,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen>
   Widget _buildImprovedTab() {
     final isKorean = widget.session.language == 'ko';
     final hasAudio = widget.session.audioPath != null;
-    final hasImage = widget.imageFile != null;
+    final hasImage = _imageFile != null;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -451,7 +463,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen>
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: Image.file(
-                  widget.imageFile!,
+                  _imageFile!,
                   fit: BoxFit.contain,
                   width: double.infinity,
                 ),
