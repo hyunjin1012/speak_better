@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import '../config.dart';
 import '../services/auth_service.dart';
@@ -77,16 +78,78 @@ class SpeakBetterApi {
     required String language,
     required String learnerMode,
     required String transcript,
+    File? imageFile,
     Map<String, dynamic>? topic,
     Map<String, dynamic>? preferences,
   }) async {
-    final res = await _dio.post('/v1/improve', data: {
+    if (imageFile != null) {
+      // If image is provided, send as multipart form
+      final filePath = imageFile.path;
+      final extension = filePath.split('.').last.toLowerCase();
+      final filename = 'image.$extension';
+
+      final form = FormData.fromMap({
+        'language': language,
+        'learnerMode': learnerMode,
+        'transcript': transcript,
+        'image': await MultipartFile.fromFile(filePath, filename: filename),
+        if (topic != null) 'topic': jsonEncode(topic),
+        if (preferences != null) 'preferences': jsonEncode(preferences),
+      });
+
+      // Debug: Log form data fields
+      print('=== SENDING FORMDATA ===');
+      print('FormData fields: language=$language, learnerMode=$learnerMode, transcriptLength=${transcript.length}');
+      print('Has image: true');
+      print('FormData fields count: ${form.fields.length}');
+      print('FormData files count: ${form.files.length}');
+
+      final res = await _dio.post(
+        '/v1/improve',
+        data: form,
+        options: Options(
+          receiveTimeout: const Duration(minutes: 2),
+          sendTimeout: const Duration(minutes: 1),
+          // Don't set Content-Type header - Dio will set it automatically with boundary
+        ),
+      );
+      return Map<String, dynamic>.from(res.data as Map);
+    } else {
+      // No image, send as JSON
+      final res = await _dio.post('/v1/improve', data: {
+        'language': language,
+        'learnerMode': learnerMode,
+        'transcript': transcript,
+        if (topic != null) 'topic': topic,
+        if (preferences != null) 'preferences': preferences,
+      });
+      return Map<String, dynamic>.from(res.data as Map);
+    }
+  }
+
+  Future<Map<String, dynamic>> analyzeImage({
+    required File imageFile,
+    required String language, // 'ko'|'en'
+    required String learnerMode, // 'korean_learner'|'english_learner'
+  }) async {
+    final filePath = imageFile.path;
+    final extension = filePath.split('.').last.toLowerCase();
+    final filename = 'image.$extension';
+
+    final form = FormData.fromMap({
       'language': language,
       'learnerMode': learnerMode,
-      'transcript': transcript,
-      if (topic != null) 'topic': topic,
-      if (preferences != null) 'preferences': preferences,
+      'image': await MultipartFile.fromFile(filePath, filename: filename),
     });
+
+    final res = await _dio.post(
+      '/v1/analyze-image',
+      data: form,
+      options: Options(
+        receiveTimeout: const Duration(minutes: 2),
+        sendTimeout: const Duration(minutes: 1),
+      ),
+    );
     return Map<String, dynamic>.from(res.data as Map);
   }
 }

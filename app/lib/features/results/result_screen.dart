@@ -15,10 +15,12 @@ import '../../state/sessions_provider.dart';
 
 class ResultScreen extends ConsumerStatefulWidget {
   final PracticeSession session;
+  final File? imageFile;
 
   const ResultScreen({
     super.key,
     required this.session,
+    this.imageFile,
   });
 
   @override
@@ -435,12 +437,28 @@ class _ResultScreenState extends ConsumerState<ResultScreen>
   Widget _buildImprovedTab() {
     final isKorean = widget.session.language == 'ko';
     final hasAudio = widget.session.audioPath != null;
+    final hasImage = widget.imageFile != null;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Image display
+          if (hasImage) ...[
+            Card(
+              elevation: 2,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.file(
+                  widget.imageFile!,
+                  fit: BoxFit.contain,
+                  width: double.infinity,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
           // Audio playback controls
           if (hasAudio) ...[
             Card(
@@ -500,7 +518,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen>
             const SizedBox(height: 16),
           ],
           Text(
-            isKorean ? '원본' : 'Original',
+            isKorean ? (hasImage ? '이미지 설명' : '원본') : (hasImage ? 'Image Description' : 'Original'),
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 8),

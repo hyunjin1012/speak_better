@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/topic.dart';
 import '../../state/topics_provider.dart';
 import '../record/record_screen.dart';
+import '../image/image_screen.dart';
 
 class TopicListScreen extends ConsumerStatefulWidget {
   final String language; // 'ko' or 'en'
@@ -28,6 +29,21 @@ class _TopicListScreenState extends ConsumerState<TopicListScreen> {
       appBar: AppBar(
         title: Text(widget.language == 'ko' ? '주제 선택' : 'Select Topic'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.image),
+            tooltip: widget.language == 'ko' ? '이미지 분석' : 'Image Analysis',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ImageScreen(
+                    language: widget.language,
+                    learnerMode: widget.learnerMode,
+                  ),
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.add),
             onPressed: () => _showAddTopicDialog(context),

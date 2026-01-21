@@ -86,16 +86,22 @@ class ErrorMessages {
           } else {
             // Try to extract error message from response
             String? errorMessage;
+            String? details;
             if (errorData is Map) {
               errorMessage = errorData['error']?.toString() ?? 
                            errorData['message']?.toString();
+              details = errorData['details']?.toString();
             } else if (errorData is String) {
               errorMessage = errorData;
             }
             
+            final fullMessage = details != null && details != errorMessage
+                ? '$errorMessage: $details'
+                : errorMessage ?? '알 수 없는 오류';
+            
             return isKorean
-                ? '오류가 발생했습니다: ${errorMessage ?? '알 수 없는 오류'}'
-                : 'An error occurred: ${errorMessage ?? 'Unknown error'}';
+                ? '오류가 발생했습니다: $fullMessage'
+                : 'An error occurred: $fullMessage';
           }
         case DioExceptionType.cancel:
           return isKorean

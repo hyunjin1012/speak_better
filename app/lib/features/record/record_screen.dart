@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import 'package:dio/dio.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../api/speakbetter_api.dart';
 import '../../models/session.dart';
 import '../../utils/error_messages.dart';
@@ -19,6 +20,7 @@ class RecordScreen extends StatefulWidget {
     this.topicTitle,
     this.topicPrompt,
     this.topicId,
+    this.initialImagePath,
   });
 
   final String language;
@@ -26,6 +28,7 @@ class RecordScreen extends StatefulWidget {
   final String? topicTitle;
   final String? topicPrompt;
   final String? topicId;
+  final String? initialImagePath;
 
   @override
   State<RecordScreen> createState() => _RecordScreenState();
@@ -34,15 +37,21 @@ class RecordScreen extends StatefulWidget {
 class _RecordScreenState extends State<RecordScreen> {
   final _recorder = AudioRecorder();
   final _api = SpeakBetterApi();
+  final _imagePicker = ImagePicker();
 
   bool _isRecording = false;
   bool _isProcessing = false;
   DateTime? _recordingStartTime;
   String? _currentAudioPath;
+  File? _selectedImage;
 
   @override
   void initState() {
     super.initState();
+    // Load initial image if provided
+    if (widget.initialImagePath != null) {
+      _selectedImage = File(widget.initialImagePath!);
+    }
     // Request permission when screen loads to ensure app appears in Settings
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _requestPermissionOnLoad();
@@ -340,6 +349,7 @@ class _RecordScreenState extends State<RecordScreen> {
           language: spokenLanguage,
           learnerMode: widget.learnerMode,
           transcript: transcript,
+          imageFile: _selectedImage,
           topic: widget.topicTitle != null || widget.topicPrompt != null
               ? {
                   'title': widget.topicTitle,
@@ -359,6 +369,8 @@ class _RecordScreenState extends State<RecordScreen> {
           print('Status Code: ${e.response?.statusCode}');
           print('Response Data: ${e.response?.data}');
           print('Request Path: ${e.requestOptions.path}');
+          print('Request Data: ${e.requestOptions.data}');
+          print('Request Headers: ${e.requestOptions.headers}');
         }
         print('========================');
 
@@ -416,6 +428,7 @@ class _RecordScreenState extends State<RecordScreen> {
         MaterialPageRoute(
           builder: (context) => ResultScreen(
             session: updatedSession,
+            imageFile: _selectedImage,
           ),
         ),
       );
@@ -438,6 +451,35 @@ class _RecordScreenState extends State<RecordScreen> {
         }
       } else {
         _cleanupAudioFile(audioPath);
+      }
+    }
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final pickedFile = await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 85,
+      );
+
+      if (pickedFile != null) {
+        setState(() {
+          _selectedImage = File(pickedFile.path);
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(ErrorMessages.getApiErrorMessage(
+              e,
+              isKorean: widget.language == 'ko',
+            )),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
@@ -489,6 +531,103 @@ class _RecordScreenState extends State<RecordScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                  // Display image if selected (always visible, even during recording)
+                  if (_selectedImage != null) ...[
+                    Container(
+                      height: _isRecording ? 300 : 250,
+                      width: double.infinity,
+                      margin: const EdgeInsets.symmetric(horizontal: 8),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: _isRecording
+                              ? Colors.red.withOpacity(0.5)
+                              : colorScheme.outline,
+                          width: _isRecording ? 2 : 1,
+                        ),
+                        boxShadow: _isRecording
+                            ? [
+                                BoxShadow(
+                                  color: Colors.red.withOpacity(0.2),
+                                  blurRadius: 8,
+                                  spreadRadius: 2,
+                                ),
+                              ]
+                            : [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 4,
+                                  spreadRadius: 1,
+                                ),
+                              ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Stack(
+                          children: [
+                            Image.file(
+                              _selectedImage!,
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                              height: double.infinity,
+                            ),
+                            if (!_isRecording && !_isProcessing)
+                              Positioned(
+                                top: 8,
+                                right: 8,
+                                child: IconButton(
+                                  icon: const Icon(Icons.close,
+                                      color: Colors.white),
+                                  onPressed: () {
+                                    setState(() {
+                                      _selectedImage = null;
+                                    });
+                                  },
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: Colors.black54,
+                                  ),
+                                  tooltip: isKorean ? '이미지 제거' : 'Remove Image',
+                                ),
+                              ),
+                            if (_isRecording)
+                              Positioned(
+                                bottom: 8,
+                                left: 8,
+                                right: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.withOpacity(0.9),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(Icons.mic,
+                                          color: Colors.white, size: 18),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        isKorean
+                                            ? '이 사진에 대해 말해주세요'
+                                            : 'Describe this image',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
                   if (widget.topicTitle != null) ...[
                     Card(
                       elevation: 4,
@@ -529,6 +668,23 @@ class _RecordScreenState extends State<RecordScreen> {
                       ),
                     ),
                     const SizedBox(height: 48),
+                  ],
+                  // Image selection button (only when not recording and no image selected)
+                  if (!_isRecording &&
+                      !_isProcessing &&
+                      _selectedImage == null) ...[
+                    OutlinedButton.icon(
+                      onPressed: () => _pickImage(ImageSource.gallery),
+                      icon: const Icon(Icons.image),
+                      label: Text(
+                        isKorean ? '이미지 선택' : 'Select Image',
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 24, vertical: 16),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
                   ],
                   if (_isProcessing)
                     Column(

@@ -6,6 +6,7 @@ export type ImproveInput = {
   transcript: string;
   tone?: "neutral" | "formal" | "casual";
   length?: "similar" | "shorter" | "longer";
+  imageDescription?: string;
 };
 
 export function buildImproveInstructions(input: ImproveInput): string {
@@ -35,6 +36,9 @@ export function buildImproveInstructions(input: ImproveInput): string {
     `Tone preference: ${input.tone ?? "neutral"}. Length: ${input.length ?? "similar"}.`,
     input.topicTitle || input.topicPrompt
       ? `Topic context (for understanding only, do not add new content): ${input.topicTitle ?? ""} ${input.topicPrompt ? `— ${input.topicPrompt}` : ""}`
+      : ``,
+    input.imageDescription
+      ? `Image context: The user is describing this image: "${input.imageDescription}". Use this context to provide more accurate feedback. For example, if the user mentions something in the image, verify if their description matches the image content.`
       : ``,
     ``,
     `For alternatives: Provide formal, casual, and concise versions based on the ORIGINAL transcript (not the improved version).`,
