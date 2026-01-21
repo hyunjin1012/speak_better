@@ -72,7 +72,13 @@ analyzeImageRouter.post("/", upload.single("image"), async (req, res) => {
     }
 
     // Now improve the description based on learner mode
-    const improveInstructions = buildImproveInstructions(language, learnerMode);
+    const improveInstructions = buildImproveInstructions({
+      language,
+      learnerMode,
+      transcript: imageDescription, // Use image description as transcript
+      tone: "neutral",
+      length: "similar",
+    });
     
     const improveResponse = await openai.chat.completions.create({
       model: "gpt-4o-mini",
