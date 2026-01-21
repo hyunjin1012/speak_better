@@ -39,14 +39,13 @@ const ImproveRequestSchema = z.object({
 });
 
 improveRouter.post("/", upload.single("image"), async (req, res) => {
+  const imageFile: Express.Multer.File | undefined = req.file;
   try {
     // Log immediately to ensure we see this in logs
     console.log("=== IMPROVE REQUEST START ===");
     console.log("Content-Type:", req.headers['content-type']);
     console.log("Method:", req.method);
     console.log("Path:", req.path);
-    
-    const imageFile = req.file;
     let body = req.body;
     
     console.log("=== IMPROVE REQUEST BODY ===");
@@ -179,7 +178,10 @@ improveRouter.post("/", upload.single("image"), async (req, res) => {
     });
 
     // Build user message content - include image if available
-    const userContent: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
+    const userContent: Array<
+      | { type: "text"; text: string }
+      | { type: "image_url"; image_url: { url: string } }
+    > = [
       {
         type: "text",
         text: parsed.language === "ko"
