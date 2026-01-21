@@ -116,6 +116,9 @@ improveRouter.post("/", upload.single("image"), async (req, res) => {
         hasLanguage: !!body.language,
         hasLearnerMode: !!body.learnerMode,
         hasTranscript: !!body.transcript,
+        allBodyKeys: Object.keys(body),
+        bodyType: typeof body,
+        bodyIsArray: Array.isArray(body),
       });
       return res.status(400).json({
         error: "Missing required fields",
@@ -123,11 +126,23 @@ improveRouter.post("/", upload.single("image"), async (req, res) => {
           language: body.language || "missing",
           learnerMode: body.learnerMode || "missing",
           transcript: body.transcript ? "present" : "missing",
+          receivedFields: Object.keys(body),
         },
       });
     }
     
-    const parsed = ImproveRequestSchema.parse(body);
+    // Try to parse with Zod schema
+    let parsed;
+    try {
+      parsed = ImproveRequestSchema.parse(body);
+    } catch (zodError: any) {
+      console.error("Zod validation error:", zodError);
+      console.error("Body that failed validation:", JSON.stringify(body, null, 2));
+      return res.status(400).json({
+        error: zodError.errors || zodError.message || "Validation failed",
+        details: zodError.errors,
+      });
+    }
     
     // Log the transcript being processed
     console.log("=== IMPROVE REQUEST ===");
