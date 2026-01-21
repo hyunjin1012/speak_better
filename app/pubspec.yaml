@@ -1,7 +1,7 @@
 name: speakbetter_app
 description: A language learning app for Korean/English practice
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
