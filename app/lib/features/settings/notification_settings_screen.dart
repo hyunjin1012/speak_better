@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/notification_service.dart';
 import '../../features/tutorial/tutorial_overlay.dart';
+import '../../state/preferences_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class NotificationSettingsScreen extends ConsumerStatefulWidget {
@@ -23,6 +24,8 @@ class _NotificationSettingsScreenState
   bool _notificationsEnabled = false;
   TimeOfDay _selectedTime = const TimeOfDay(hour: 18, minute: 0);
   bool _loading = false;
+  String? _currentUILanguage;
+  String? _currentLearnerMode;
 
   @override
   void initState() {
@@ -38,8 +41,15 @@ class _NotificationSettingsScreenState
 
     // Check if notifications are enabled using the service's method (more reliable)
     final hasPermission = await _notificationService.checkPermissions();
+
+    // Load preferences
+    final uiLanguage = ref.read(uiLanguageProvider);
+    final learnerMode = ref.read(learnerModeProvider);
+
     setState(() {
       _notificationsEnabled = hasPermission;
+      _currentUILanguage = uiLanguage ?? widget.language;
+      _currentLearnerMode = learnerMode;
     });
 
     setState(() => _loading = false);
@@ -65,10 +75,12 @@ class _NotificationSettingsScreenState
       }
 
       if (hasPermission) {
+        // Get current language from provider
+        final currentLang = ref.read(uiLanguageProvider) ?? widget.language;
         await _notificationService.scheduleDailyNotifications(
           hour: _selectedTime.hour,
           minute: _selectedTime.minute,
-          language: widget.language,
+          language: currentLang,
         );
         setState(() {
           _notificationsEnabled = true;
@@ -77,7 +89,7 @@ class _NotificationSettingsScreenState
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(widget.language == 'ko'
+              content: Text(currentLang == 'ko'
                   ? '알림이 활성화되었습니다'
                   : 'Notifications enabled'),
             ),
@@ -89,27 +101,27 @@ class _NotificationSettingsScreenState
         if (permissionStatus.isPermanentlyDenied) {
           // Show dialog to open settings
           if (mounted) {
+            final currentLang = ref.read(uiLanguageProvider) ?? widget.language;
+            final isKorean = currentLang == 'ko';
             showDialog(
               context: context,
               builder: (context) => AlertDialog(
-                title: Text(widget.language == 'ko'
-                    ? '알림 권한 필요'
-                    : 'Notification Permission Required'),
-                content: Text(widget.language == 'ko'
+                title: Text(
+                    isKorean ? '알림 권한 필요' : 'Notification Permission Required'),
+                content: Text(isKorean
                     ? '알림을 받으려면 설정에서 알림 권한을 허용해주세요.'
                     : 'Please enable notification permission in Settings to receive reminders.'),
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: Text(widget.language == 'ko' ? '취소' : 'Cancel'),
+                    child: Text(isKorean ? '취소' : 'Cancel'),
                   ),
                   TextButton(
                     onPressed: () {
                       Navigator.pop(context);
                       openAppSettings();
                     },
-                    child: Text(
-                        widget.language == 'ko' ? '설정 열기' : 'Open Settings'),
+                    child: Text(isKorean ? '설정 열기' : 'Open Settings'),
                   ),
                 ],
               ),
@@ -118,13 +130,15 @@ class _NotificationSettingsScreenState
         } else {
           // Permission denied (but not permanently)
           if (mounted) {
+            final currentLang = ref.read(uiLanguageProvider) ?? widget.language;
+            final isKorean = currentLang == 'ko';
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(widget.language == 'ko'
+                content: Text(isKorean
                     ? '알림 권한이 거부되었습니다. 설정에서 권한을 허용해주세요.'
                     : 'Notification permission denied. Please enable it in Settings.'),
                 action: SnackBarAction(
-                  label: widget.language == 'ko' ? '설정' : 'Settings',
+                  label: isKorean ? '설정' : 'Settings',
                   onPressed: () => openAppSettings(),
                 ),
               ),
@@ -139,11 +153,12 @@ class _NotificationSettingsScreenState
       });
 
       if (mounted) {
+        final currentLang = ref.read(uiLanguageProvider) ?? widget.language;
+        final isKorean = currentLang == 'ko';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(widget.language == 'ko'
-                ? '알림이 비활성화되었습니다'
-                : 'Notifications disabled'),
+            content:
+                Text(isKorean ? '알림이 비활성화되었습니다' : 'Notifications disabled'),
           ),
         );
       }
@@ -165,18 +180,21 @@ class _NotificationSettingsScreenState
 
       // Update notifications if enabled
       if (_notificationsEnabled) {
+        // Get current language from provider
+        final currentLang = ref.read(uiLanguageProvider) ?? widget.language;
         await _notificationService.scheduleDailyNotifications(
           hour: _selectedTime.hour,
           minute: _selectedTime.minute,
-          language: widget.language,
+          language: currentLang,
         );
 
         if (mounted) {
+          final currentLang = ref.read(uiLanguageProvider) ?? widget.language;
+          final isKorean = currentLang == 'ko';
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(widget.language == 'ko'
-                  ? '알림 시간이 업데이트되었습니다'
-                  : 'Notification time updated'),
+              content: Text(
+                  isKorean ? '알림 시간이 업데이트되었습니다' : 'Notification time updated'),
             ),
           );
         }
@@ -185,7 +203,9 @@ class _NotificationSettingsScreenState
   }
 
   void _showTutorial(BuildContext context) {
-    final isKorean = widget.language == 'ko';
+    // Get current language from provider
+    final currentLang = ref.read(uiLanguageProvider) ?? widget.language;
+    final isKorean = currentLang == 'ko';
 
     showTutorialOverlay(
       context,
@@ -233,7 +253,7 @@ class _NotificationSettingsScreenState
               : 'You\'re all set! Start practicing and improve your language skills.',
         ),
       ],
-      language: widget.language,
+      language: currentLang,
       onComplete: () {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -246,7 +266,10 @@ class _NotificationSettingsScreenState
 
   @override
   Widget build(BuildContext context) {
-    final isKorean = widget.language == 'ko';
+    // Watch UI language provider to react to changes immediately
+    final savedLanguage = ref.watch(uiLanguageProvider);
+    final currentLanguage = savedLanguage ?? widget.language;
+    final isKorean = currentLanguage == 'ko';
 
     return Scaffold(
       appBar: AppBar(
@@ -287,6 +310,208 @@ class _NotificationSettingsScreenState
                   ),
                 ),
                 const SizedBox(height: 24),
+
+                // UI Language selector
+                Card(
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.language),
+                        title:
+                            Text(isKorean ? '인터페이스 언어' : 'Interface Language'),
+                        subtitle: Text(
+                            _currentUILanguage == 'ko' ? '한국어' : 'English'),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () async {
+                                  await ref
+                                      .read(uiLanguageProvider.notifier)
+                                      .setLanguage('ko');
+                                  setState(() {
+                                    _currentUILanguage = 'ko';
+                                  });
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content:
+                                            Text('언어가 변경되었습니다. 앱을 재시작해주세요.'),
+                                        duration: Duration(seconds: 3),
+                                      ),
+                                    );
+                                  }
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  side: BorderSide(
+                                    color: _currentUILanguage == 'ko'
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Colors.grey,
+                                    width: _currentUILanguage == 'ko' ? 2 : 1,
+                                  ),
+                                  backgroundColor: _currentUILanguage == 'ko'
+                                      ? Theme.of(context)
+                                          .colorScheme
+                                          .primaryContainer
+                                      : null,
+                                ),
+                                child: const Text('한국어'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () async {
+                                  await ref
+                                      .read(uiLanguageProvider.notifier)
+                                      .setLanguage('en');
+                                  setState(() {
+                                    _currentUILanguage = 'en';
+                                  });
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                            'Language changed. Please restart the app.'),
+                                        duration: Duration(seconds: 3),
+                                      ),
+                                    );
+                                  }
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  side: BorderSide(
+                                    color: _currentUILanguage == 'en'
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Colors.grey,
+                                    width: _currentUILanguage == 'en' ? 2 : 1,
+                                  ),
+                                  backgroundColor: _currentUILanguage == 'en'
+                                      ? Theme.of(context)
+                                          .colorScheme
+                                          .primaryContainer
+                                      : null,
+                                ),
+                                child: const Text('English'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Learning Language selector
+                Card(
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.school),
+                        title: Text(isKorean ? '학습 언어' : 'Learning Language'),
+                        subtitle: Text(_currentLearnerMode == 'korean_learner'
+                            ? (isKorean ? '한국어 학습자' : 'Korean Learner')
+                            : (isKorean ? '영어 학습자' : 'English Learner')),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () async {
+                                  await ref
+                                      .read(learnerModeProvider.notifier)
+                                      .setLearnerMode('korean_learner');
+                                  setState(() {
+                                    _currentLearnerMode = 'korean_learner';
+                                  });
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(isKorean
+                                            ? '학습 언어가 변경되었습니다'
+                                            : 'Learning language changed'),
+                                      ),
+                                    );
+                                  }
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  side: BorderSide(
+                                    color: _currentLearnerMode ==
+                                            'korean_learner'
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Colors.grey,
+                                    width:
+                                        _currentLearnerMode == 'korean_learner'
+                                            ? 2
+                                            : 1,
+                                  ),
+                                  backgroundColor:
+                                      _currentLearnerMode == 'korean_learner'
+                                          ? Theme.of(context)
+                                              .colorScheme
+                                              .primaryContainer
+                                          : null,
+                                ),
+                                child: Text(
+                                    isKorean ? '한국어 학습자' : 'Korean Learner'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () async {
+                                  await ref
+                                      .read(learnerModeProvider.notifier)
+                                      .setLearnerMode('english_learner');
+                                  setState(() {
+                                    _currentLearnerMode = 'english_learner';
+                                  });
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(isKorean
+                                            ? '학습 언어가 변경되었습니다'
+                                            : 'Learning language changed'),
+                                      ),
+                                    );
+                                  }
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  side: BorderSide(
+                                    color: _currentLearnerMode ==
+                                            'english_learner'
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Colors.grey,
+                                    width:
+                                        _currentLearnerMode == 'english_learner'
+                                            ? 2
+                                            : 1,
+                                  ),
+                                  backgroundColor:
+                                      _currentLearnerMode == 'english_learner'
+                                          ? Theme.of(context)
+                                              .colorScheme
+                                              .primaryContainer
+                                          : null,
+                                ),
+                                child: Text(
+                                    isKorean ? '영어 학습자' : 'English Learner'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
 
                 // Tutorial button
                 Card(

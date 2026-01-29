@@ -8,12 +8,43 @@ class LocalStore {
   static const String topicsBoxName = 'topics';
   static const String sessionsBoxName = 'sessions';
   static const String flashcardsBoxName = 'flashcards';
+  static const String preferencesBoxName = 'preferences';
 
   static Future<void> init() async {
     await Hive.initFlutter();
     await Hive.openBox(topicsBoxName);
     await Hive.openBox(sessionsBoxName);
     await Hive.openBox(flashcardsBoxName);
+    await Hive.openBox(preferencesBoxName);
+  }
+
+  // Preferences
+  static Box get preferencesBox => Hive.box(preferencesBoxName);
+
+  static Future<void> savePreference(String key, String value) async {
+    await preferencesBox.put(key, value);
+  }
+
+  static String? getPreference(String key) {
+    return preferencesBox.get(key) as String?;
+  }
+
+  // UI Language preference ('ko' or 'en')
+  static Future<void> saveUILanguage(String language) async {
+    await savePreference('ui_language', language);
+  }
+
+  static String? getUILanguage() {
+    return getPreference('ui_language');
+  }
+
+  // Learner Mode preference ('korean_learner' or 'english_learner')
+  static Future<void> saveLearnerMode(String learnerMode) async {
+    await savePreference('learner_mode', learnerMode);
+  }
+
+  static String? getLearnerMode() {
+    return getPreference('learner_mode');
   }
 
   // Topics

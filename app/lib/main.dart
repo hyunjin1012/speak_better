@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-import 'data/local_store.dart';
+import 'data/local_store.dart' show LocalStore;
 import 'features/auth/login_screen.dart';
 import 'features/topics/topic_list_screen.dart';
 import 'features/image/image_screen.dart';
@@ -18,6 +18,7 @@ import 'state/auth_provider.dart';
 import 'state/stats_provider.dart';
 import 'state/achievements_provider.dart';
 import 'state/flashcards_provider.dart';
+import 'state/preferences_provider.dart';
 import 'widgets/offline_banner.dart';
 
 void main() async {
@@ -127,17 +128,34 @@ class AuthWrapper extends ConsumerWidget {
 // This avoids circular dependency when importing from login_screen.dart
 Widget createLanguageSelectionScreen() => const LanguageSelectionScreen();
 
-class LanguageSelectionScreen extends StatefulWidget {
+class LanguageSelectionScreen extends ConsumerStatefulWidget {
   const LanguageSelectionScreen({super.key});
 
   @override
-  State<LanguageSelectionScreen> createState() =>
+  ConsumerState<LanguageSelectionScreen> createState() =>
       _LanguageSelectionScreenState();
 }
 
-class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
+class _LanguageSelectionScreenState
+    extends ConsumerState<LanguageSelectionScreen> {
   String? _selectedLanguage;
   String? _selectedLearnerMode;
+
+  @override
+  void initState() {
+    super.initState();
+    // Load saved preferences
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final savedLanguage = ref.read(uiLanguageProvider);
+      final savedLearnerMode = ref.read(learnerModeProvider);
+      if (savedLanguage != null || savedLearnerMode != null) {
+        setState(() {
+          _selectedLanguage = savedLanguage;
+          _selectedLearnerMode = savedLearnerMode;
+        });
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -269,7 +287,19 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
                       _selectedLearnerMode != null) ...[
                     const SizedBox(height: 48),
                     ElevatedButton.icon(
-                      onPressed: () {
+                      onPressed: () async {
+                        // Save preferences
+                        await LocalStore.saveUILanguage(_selectedLanguage!);
+                        await LocalStore.saveLearnerMode(_selectedLearnerMode!);
+
+                        // Update providers
+                        ref
+                            .read(uiLanguageProvider.notifier)
+                            .setLanguage(_selectedLanguage!);
+                        ref
+                            .read(learnerModeProvider.notifier)
+                            .setLearnerMode(_selectedLearnerMode!);
+
                         Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(
@@ -433,7 +463,13 @@ class _MainScreenState extends ConsumerState<MainScreen> {
         }
       });
     });
-    final isKorean = widget.language == 'ko';
+
+    // Watch preferences - use saved preferences if available, otherwise use widget parameters
+    final savedLanguage = ref.watch(uiLanguageProvider);
+    final savedLearnerMode = ref.watch(learnerModeProvider);
+    final language = savedLanguage ?? widget.language;
+    final learnerMode = savedLearnerMode ?? widget.learnerMode;
+    final isKorean = language == 'ko';
 
     return Consumer(
       builder: (context, ref, _) {
@@ -460,8 +496,8 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                                 context,
                                 MaterialPageRoute(
                                   builder: (context) => ImageScreen(
-                                    language: widget.language,
-                                    learnerMode: widget.learnerMode,
+                                    language: language,
+                                    learnerMode: learnerMode,
                                   ),
                                 ),
                               );
@@ -473,8 +509,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                                 icon: const Icon(Icons.add),
                                 tooltip: isKorean ? '주제 추가' : 'Add Topic',
                                 onPressed: () {
-                                  _showAddTopicDialog(
-                                      context, ref, widget.language);
+                                  _showAddTopicDialog(context, ref, language);
                                 },
                               );
                             },
@@ -490,7 +525,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                               MaterialPageRoute(
                                 builder: (context) =>
                                     NotificationSettingsScreen(
-                                        language: widget.language),
+                                        language: language),
                               ),
                             );
                           },
@@ -504,7 +539,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                               context,
                               MaterialPageRoute(
                                 builder: (context) =>
-                                    ProgressScreen(language: widget.language),
+                                    ProgressScreen(language: language),
                               ),
                             );
                           },
@@ -552,8 +587,8 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) => FlashcardsScreen(
-                                        language: widget.language),
+                                    builder: (context) =>
+                                        FlashcardsScreen(language: language),
                                   ),
                                 );
                               },
@@ -603,8 +638,8 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) => AchievementsScreen(
-                                        language: widget.language),
+                                    builder: (context) =>
+                                        AchievementsScreen(language: language),
                                   ),
                                 );
                               },
@@ -731,10 +766,10 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                     body: TabBarView(
                       children: [
                         TopicListScreen(
-                          language: widget.language,
-                          learnerMode: widget.learnerMode,
+                          language: language,
+                          learnerMode: learnerMode,
                         ),
-                        HistoryScreen(language: widget.language),
+                        HistoryScreen(language: language),
                       ],
                     ),
                   );
@@ -789,7 +824,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                       Topic(
                         title: titleController.text,
                         prompt: promptController.text,
-                        language: widget.language,
+                        language: language,
                       ),
                     );
                 Navigator.pop(context);
