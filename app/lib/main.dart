@@ -5,11 +5,14 @@ import 'firebase_options.dart';
 import 'data/local_store.dart';
 import 'features/auth/login_screen.dart';
 import 'features/topics/topic_list_screen.dart';
+import 'features/image/image_screen.dart';
 import 'features/history/history_screen.dart';
 import 'features/achievements/achievements_screen.dart';
 import 'features/progress/progress_screen.dart';
 import 'features/settings/notification_settings_screen.dart';
 import 'features/flashcards/flashcards_screen.dart';
+import 'models/topic.dart';
+import 'state/topics_provider.dart';
 import 'services/notification_service.dart';
 import 'state/auth_provider.dart';
 import 'state/stats_provider.dart';
@@ -105,6 +108,10 @@ class AuthWrapper extends ConsumerWidget {
     );
   }
 }
+
+// Helper function to create LanguageSelectionScreen for navigation
+// This avoids circular dependency when importing from login_screen.dart
+Widget createLanguageSelectionScreen() => const LanguageSelectionScreen();
 
 class LanguageSelectionScreen extends StatefulWidget {
   const LanguageSelectionScreen({super.key});
@@ -249,7 +256,7 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
                     const SizedBox(height: 48),
                     ElevatedButton.icon(
                       onPressed: () {
-                        Navigator.push(
+                        Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(
                             builder: (context) => MainScreen(
@@ -374,7 +381,7 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
   }
 }
 
-class MainScreen extends StatelessWidget {
+class MainScreen extends ConsumerStatefulWidget {
   final String language;
   final String learnerMode;
 
@@ -385,204 +392,399 @@ class MainScreen extends StatelessWidget {
   });
 
   @override
+  ConsumerState<MainScreen> createState() => _MainScreenState();
+}
+
+class _MainScreenState extends ConsumerState<MainScreen> {
+  @override
   Widget build(BuildContext context) {
-    final isKorean = language == 'ko';
+    // Listen to auth state changes - when user signs out, ensure we're on LoginScreen
+    // This listener is a backup in case manual navigation didn't happen
+    ref.listen(authStateProvider, (previous, next) {
+      next.whenData((user) {
+        if (user == null && mounted) {
+          // User signed out - ensure we're showing LoginScreen
+          // If LoginScreen is already shown (from manual navigation), do nothing
+          // Otherwise, pop back to AuthWrapper which will show LoginScreen
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              // Only pop if we're not already on LoginScreen
+              // Check by seeing if we can pop - if we can, we're not at root
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context, rootNavigator: true)
+                    .popUntil((route) => route.isFirst);
+              }
+            }
+          });
+        }
+      });
+    });
+    final isKorean = widget.language == 'ko';
 
     return Consumer(
       builder: (context, ref, _) {
         final authService = ref.read(authServiceProvider);
         return DefaultTabController(
           length: 2,
-          child: Scaffold(
-            appBar: AppBar(
-              title: Text(isKorean ? 'Speak Better' : 'Speak Better'),
-              actions: [
-                // Settings button
-                IconButton(
-                  icon: const Icon(Icons.settings),
-                  tooltip: isKorean ? '설정' : 'Settings',
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            NotificationSettingsScreen(language: language),
-                      ),
-                    );
-                  },
-                ),
-                // Progress button
-                IconButton(
-                  icon: const Icon(Icons.bar_chart),
-                  tooltip: isKorean ? '진행 상황' : 'Progress',
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            ProgressScreen(language: language),
-                      ),
-                    );
-                  },
-                ),
-                // Flashcards button
-                Consumer(
-                  builder: (context, ref, _) {
-                    final dueCount = ref
-                        .read(flashcardsProvider.notifier)
-                        .getDueCards(language)
-                        .length;
-                    return IconButton(
-                      icon: Stack(
-                        children: [
-                          const Icon(Icons.auto_stories),
-                          if (dueCount > 0)
-                            Positioned(
-                              right: 0,
-                              top: 0,
-                              child: Container(
-                                padding: const EdgeInsets.all(2),
-                                decoration: const BoxDecoration(
-                                  color: Colors.orange,
-                                  shape: BoxShape.circle,
-                                ),
-                                constraints: const BoxConstraints(
-                                  minWidth: 16,
-                                  minHeight: 16,
-                                ),
-                                child: Text(
-                                  '$dueCount',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
+          child: Builder(
+            builder: (builderContext) {
+              final tabController = DefaultTabController.of(builderContext);
+              // Listen to tab changes to rebuild actions
+              return AnimatedBuilder(
+                animation: tabController,
+                builder: (context, _) {
+                  return Scaffold(
+                    appBar: AppBar(
+                      actions: [
+                        // Topic-specific actions (only show on Topics tab)
+                        if (tabController.index == 0) ...[
+                          IconButton(
+                            icon: const Icon(Icons.image),
+                            tooltip: isKorean ? '이미지 분석' : 'Image Analysis',
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => ImageScreen(
+                                    language: widget.language,
+                                    learnerMode: widget.learnerMode,
                                   ),
-                                  textAlign: TextAlign.center,
                                 ),
-                              ),
-                            ),
+                              );
+                            },
+                          ),
+                          Consumer(
+                            builder: (context, ref, _) {
+                              return IconButton(
+                                icon: const Icon(Icons.add),
+                                tooltip: isKorean ? '주제 추가' : 'Add Topic',
+                                onPressed: () {
+                                  _showAddTopicDialog(
+                                      context, ref, widget.language);
+                                },
+                              );
+                            },
+                          ),
                         ],
-                      ),
-                      tooltip: isKorean ? '단어 카드' : 'Flashcards',
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                FlashcardsScreen(language: language),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
-                // Achievements button
-                Consumer(
-                  builder: (context, ref, _) {
-                    final achievements = ref.watch(achievementsProvider);
-                    final unlockedCount =
-                        achievements.where((a) => a.isUnlocked).length;
-                    return IconButton(
-                      icon: Stack(
-                        children: [
-                          const Icon(Icons.emoji_events),
-                          if (unlockedCount > 0)
-                            Positioned(
-                              right: 0,
-                              top: 0,
-                              child: Container(
-                                padding: const EdgeInsets.all(2),
-                                decoration: const BoxDecoration(
-                                  color: Colors.red,
-                                  shape: BoxShape.circle,
-                                ),
-                                constraints: const BoxConstraints(
-                                  minWidth: 16,
-                                  minHeight: 16,
-                                ),
-                                child: Text(
-                                  '$unlockedCount',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
+                        // Settings button
+                        IconButton(
+                          icon: const Icon(Icons.settings),
+                          tooltip: isKorean ? '설정' : 'Settings',
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    NotificationSettingsScreen(
+                                        language: widget.language),
                               ),
-                            ),
-                        ],
-                      ),
-                      tooltip: isKorean ? '업적' : 'Achievements',
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                AchievementsScreen(language: language),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
-                // Streak display
-                Consumer(
-                  builder: (context, ref, _) {
-                    final stats = ref.watch(statsProvider);
-                    if (stats.currentStreak > 0) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                        child: Center(
-                          child: Row(
-                            children: [
-                              const Icon(Icons.local_fire_department,
-                                  color: Colors.orange, size: 20),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${stats.currentStreak}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                            ],
-                          ),
+                            );
+                          },
                         ),
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.logout),
-                  tooltip: isKorean ? '로그아웃' : 'Sign Out',
-                  onPressed: () async {
-                    await authService.signOut();
-                    // Navigation handled by auth state listener
-                  },
-                ),
-              ],
-              bottom: TabBar(
-                tabs: [
-                  Tab(text: isKorean ? '주제' : 'Topics'),
-                  Tab(text: isKorean ? '기록' : 'History'),
-                ],
-              ),
-            ),
-            body: TabBarView(
-              children: [
-                TopicListScreen(
-                  language: language,
-                  learnerMode: learnerMode,
-                ),
-                HistoryScreen(language: language),
-              ],
-            ),
+                        // Progress button
+                        IconButton(
+                          icon: const Icon(Icons.bar_chart),
+                          tooltip: isKorean ? '진행 상황' : 'Progress',
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    ProgressScreen(language: widget.language),
+                              ),
+                            );
+                          },
+                        ),
+                        // Flashcards button
+                        Consumer(
+                          builder: (context, ref, _) {
+                            final dueCount = ref
+                                .read(flashcardsProvider.notifier)
+                                .getDueCards(widget.language)
+                                .length;
+                            return IconButton(
+                              icon: Stack(
+                                children: [
+                                  const Icon(Icons.auto_stories),
+                                  if (dueCount > 0)
+                                    Positioned(
+                                      right: 0,
+                                      top: 0,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(2),
+                                        decoration: const BoxDecoration(
+                                          color: Colors.orange,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        constraints: const BoxConstraints(
+                                          minWidth: 16,
+                                          minHeight: 16,
+                                        ),
+                                        child: Text(
+                                          '$dueCount',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              tooltip: isKorean ? '단어 카드' : 'Flashcards',
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => FlashcardsScreen(
+                                        language: widget.language),
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        ),
+                        // Achievements button
+                        Consumer(
+                          builder: (context, ref, _) {
+                            final achievements =
+                                ref.watch(achievementsProvider);
+                            final unlockedCount =
+                                achievements.where((a) => a.isUnlocked).length;
+                            return IconButton(
+                              icon: Stack(
+                                children: [
+                                  const Icon(Icons.emoji_events),
+                                  if (unlockedCount > 0)
+                                    Positioned(
+                                      right: 0,
+                                      top: 0,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(2),
+                                        decoration: const BoxDecoration(
+                                          color: Colors.red,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        constraints: const BoxConstraints(
+                                          minWidth: 16,
+                                          minHeight: 16,
+                                        ),
+                                        child: Text(
+                                          '$unlockedCount',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              tooltip: isKorean ? '업적' : 'Achievements',
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => AchievementsScreen(
+                                        language: widget.language),
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        ),
+                        // Streak display
+                        Consumer(
+                          builder: (context, ref, _) {
+                            final stats = ref.watch(statsProvider);
+                            if (stats.currentStreak > 0) {
+                              return Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 8.0),
+                                child: Center(
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.local_fire_department,
+                                          color: Colors.orange, size: 20),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        '${stats.currentStreak}',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
+                        ),
+                        Builder(
+                          builder: (dialogContext) {
+                            return IconButton(
+                              icon: const Icon(Icons.logout),
+                              tooltip: isKorean ? '로그아웃' : 'Sign Out',
+                              onPressed: () async {
+                                // Show confirmation dialog
+                                final shouldSignOut = await showDialog<bool>(
+                                  context: dialogContext,
+                                  builder: (context) => AlertDialog(
+                                    title: Text(
+                                      isKorean ? '로그아웃' : 'Sign Out',
+                                    ),
+                                    content: Text(
+                                      isKorean
+                                          ? '정말 로그아웃하시겠습니까?'
+                                          : 'Are you sure you want to sign out?',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.of(context).pop(false),
+                                        child: Text(
+                                          isKorean ? '취소' : 'Cancel',
+                                        ),
+                                      ),
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.of(context).pop(true),
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: Colors.red,
+                                        ),
+                                        child: Text(
+                                          isKorean ? '로그아웃' : 'Sign Out',
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+
+                                if (shouldSignOut == true &&
+                                    dialogContext.mounted) {
+                                  try {
+                                    // Navigate to LoginScreen immediately for visual feedback
+                                    // Then sign out - LoginScreen will handle the auth state
+                                    Navigator.of(dialogContext,
+                                            rootNavigator: true)
+                                        .pushAndRemoveUntil(
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const LoginScreen(),
+                                      ),
+                                      (route) =>
+                                          false, // Remove all previous routes
+                                    );
+
+                                    // Sign out after navigation for immediate UI update
+                                    await authService.signOut();
+                                  } catch (e) {
+                                    // Show error if sign out fails
+                                    if (dialogContext.mounted) {
+                                      ScaffoldMessenger.of(dialogContext)
+                                          .showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            isKorean
+                                                ? '로그아웃 중 오류가 발생했습니다'
+                                                : 'Error signing out',
+                                          ),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                }
+                              },
+                            );
+                          },
+                        ),
+                      ],
+                      bottom: TabBar(
+                        tabs: [
+                          Tab(text: isKorean ? '주제' : 'Topics'),
+                          Tab(text: isKorean ? '기록' : 'History'),
+                        ],
+                      ),
+                    ),
+                    body: TabBarView(
+                      children: [
+                        TopicListScreen(
+                          language: widget.language,
+                          learnerMode: widget.learnerMode,
+                        ),
+                        HistoryScreen(language: widget.language),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
           ),
         );
       },
+    );
+  }
+
+  void _showAddTopicDialog(
+      BuildContext context, WidgetRef ref, String language) {
+    final titleController = TextEditingController();
+    final promptController = TextEditingController();
+    final isKorean = language == 'ko';
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(isKorean ? '새 주제 추가' : 'Add New Topic'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleController,
+              decoration: InputDecoration(
+                labelText: isKorean ? '제목' : 'Title',
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: promptController,
+              decoration: InputDecoration(
+                labelText: isKorean ? '프롬프트' : 'Prompt',
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(isKorean ? '취소' : 'Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              if (titleController.text.isNotEmpty &&
+                  promptController.text.isNotEmpty) {
+                ref.read(topicsProvider.notifier).addTopic(
+                      Topic(
+                        title: titleController.text,
+                        prompt: promptController.text,
+                        language: widget.language,
+                      ),
+                    );
+                Navigator.pop(context);
+              }
+            },
+            child: Text(isKorean ? '추가' : 'Add'),
+          ),
+        ],
+      ),
     );
   }
 }

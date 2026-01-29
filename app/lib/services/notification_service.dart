@@ -342,10 +342,12 @@ class NotificationService {
     // Cancel and reschedule to update messages
     // For simplicity, we'll just reschedule all
     // In a production app, you'd want to get the saved time preference
+    // Note: language parameter is the practiced language (from session.language),
+    // not the UI language, so notifications will be in the language being practiced
     await scheduleDailyNotifications(
-      hour: 18, // Default 6 PM
+      hour: 18, // Default 6 PM - TODO: Use saved user preference
       minute: 0,
-      language: language,
+      language: language, // This is now the practiced language, not UI language
     );
   }
 }

@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:record/record.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
@@ -9,6 +11,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../api/speakbetter_api.dart';
 import '../../models/session.dart';
 import '../../utils/error_messages.dart';
+import '../../utils/constants.dart';
 import 'dart:convert';
 import '../results/result_screen.dart';
 
@@ -44,6 +47,8 @@ class _RecordScreenState extends State<RecordScreen> {
   DateTime? _recordingStartTime;
   String? _currentAudioPath;
   File? _selectedImage;
+  Timer? _recordingTimer;
+  Duration _recordingDuration = Duration.zero;
 
   @override
   void initState() {
@@ -206,8 +211,22 @@ class _RecordScreenState extends State<RecordScreen> {
       setState(() {
         _isRecording = true;
         _recordingStartTime = DateTime.now();
+        _recordingDuration = Duration.zero;
         _currentAudioPath = audioPath;
       });
+
+      // Start timer for recording duration
+      _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (mounted && _recordingStartTime != null) {
+          setState(() {
+            _recordingDuration =
+                DateTime.now().difference(_recordingStartTime!);
+          });
+        }
+      });
+
+      // Haptic feedback for recording start
+      HapticFeedback.mediumImpact();
     } catch (e) {
       if (mounted) {
         final errorMessage = ErrorMessages.getApiErrorMessage(
@@ -227,13 +246,18 @@ class _RecordScreenState extends State<RecordScreen> {
 
   Future<void> _cancelRecording() async {
     try {
+      _recordingTimer?.cancel();
       await _recorder.stop();
       _cleanupAudioFile(_currentAudioPath);
       setState(() {
         _isRecording = false;
         _recordingStartTime = null;
+        _recordingDuration = Duration.zero;
         _currentAudioPath = null;
       });
+
+      // Haptic feedback for cancellation
+      HapticFeedback.lightImpact();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -259,11 +283,16 @@ class _RecordScreenState extends State<RecordScreen> {
     String? transcript;
     PracticeSession? session;
     try {
+      _recordingTimer?.cancel();
       audioPath = await _recorder.stop();
       setState(() {
         _isRecording = false;
         _recordingStartTime = null;
+        _recordingDuration = Duration.zero;
       });
+
+      // Haptic feedback for stop
+      HapticFeedback.mediumImpact();
 
       if (audioPath == null) {
         _cleanupAudioFile(_currentAudioPath);
@@ -361,7 +390,7 @@ class _RecordScreenState extends State<RecordScreen> {
       }
 
       session = PracticeSession(
-        language: widget.language,
+        language: spokenLanguage, // Use practiced language, not UI language
         learnerMode: widget.learnerMode,
         topicId: widget.topicId,
         audioPath: absoluteAudioPath,
@@ -529,6 +558,7 @@ class _RecordScreenState extends State<RecordScreen> {
 
   @override
   void dispose() {
+    _recordingTimer?.cancel();
     _recorder.dispose();
     super.dispose();
   }
@@ -559,19 +589,18 @@ class _RecordScreenState extends State<RecordScreen> {
                   children: [
                     Expanded(
                       child: SingleChildScrollView(
-                        padding: const EdgeInsets.all(24.0),
+                        padding: AppPadding.allLg,
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.start,
                           children: [
                             // Display image if selected (always visible, even during recording)
                             if (_selectedImage != null) ...[
                               Container(
-                                height: 180,
+                                height: AppSizes.imageMedium,
                                 width: double.infinity,
-                                margin:
-                                    const EdgeInsets.symmetric(horizontal: 8),
+                                margin: AppPadding.horizontalSm,
                                 decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(16),
+                                  borderRadius: AppBorderRadius.circularLg,
                                   border: Border.all(
                                     color: Colors.red.withOpacity(0.5),
                                     width: 2,
@@ -585,7 +614,7 @@ class _RecordScreenState extends State<RecordScreen> {
                                   ],
                                 ),
                                 child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(16),
+                                  borderRadius: AppBorderRadius.circularLg,
                                   child: Stack(
                                     children: [
                                       Image.file(
@@ -600,11 +629,12 @@ class _RecordScreenState extends State<RecordScreen> {
                                         right: 8,
                                         child: Container(
                                           padding: const EdgeInsets.symmetric(
-                                              horizontal: 12, vertical: 8),
+                                              horizontal: AppSpacing.md,
+                                              vertical: AppSpacing.sm),
                                           decoration: BoxDecoration(
                                             color: Colors.red.withOpacity(0.9),
                                             borderRadius:
-                                                BorderRadius.circular(20),
+                                                AppBorderRadius.circularXl,
                                           ),
                                           child: Row(
                                             mainAxisSize: MainAxisSize.min,
@@ -614,7 +644,7 @@ class _RecordScreenState extends State<RecordScreen> {
                                               const Icon(Icons.mic,
                                                   color: Colors.white,
                                                   size: 18),
-                                              const SizedBox(width: 8),
+                                              AppSpacing.widthSm,
                                               Text(
                                                 isKorean
                                                     ? '이 사진에 대해 말해주세요'
@@ -633,16 +663,16 @@ class _RecordScreenState extends State<RecordScreen> {
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 24),
+                              AppSpacing.heightLg,
                             ],
                             if (widget.topicTitle != null) ...[
                               Card(
                                 elevation: 4,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
+                                shape: const RoundedRectangleBorder(
+                                  borderRadius: AppBorderRadius.circularLg,
                                 ),
                                 child: Padding(
-                                  padding: const EdgeInsets.all(20),
+                                  padding: AppPadding.allMd,
                                   child: Column(
                                     children: [
                                       Text(
@@ -657,7 +687,7 @@ class _RecordScreenState extends State<RecordScreen> {
                                       ),
                                       if (widget.topicPrompt != null &&
                                           widget.topicPrompt!.isNotEmpty) ...[
-                                        const SizedBox(height: 12),
+                                        AppSpacing.heightMd,
                                         Text(
                                           widget.topicPrompt!,
                                           style: Theme.of(context)
@@ -674,13 +704,13 @@ class _RecordScreenState extends State<RecordScreen> {
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 24),
+                              AppSpacing.heightLg,
                             ],
                             Column(
                               children: [
                                 AnimatedContainer(
                                   duration: const Duration(milliseconds: 300),
-                                  padding: const EdgeInsets.all(20),
+                                  padding: AppPadding.allMd,
                                   decoration: BoxDecoration(
                                     color: Colors.red.withOpacity(0.1),
                                     shape: BoxShape.circle,
@@ -691,7 +721,7 @@ class _RecordScreenState extends State<RecordScreen> {
                                     color: Colors.red,
                                   ),
                                 ),
-                                const SizedBox(height: 24),
+                                AppSpacing.heightLg,
                                 Text(
                                   isKorean ? '녹음 중...' : 'Recording...',
                                   style: Theme.of(context)
@@ -702,37 +732,26 @@ class _RecordScreenState extends State<RecordScreen> {
                                       ),
                                 ),
                                 if (_isRecording &&
-                                    _recordingStartTime != null) ...[
-                                  const SizedBox(height: 16),
-                                  StreamBuilder<DateTime>(
-                                    stream: Stream.periodic(
-                                        const Duration(seconds: 1),
-                                        (_) => DateTime.now()),
-                                    builder: (context, snapshot) {
-                                      final duration = DateTime.now()
-                                          .difference(_recordingStartTime!);
-                                      final minutes = duration.inMinutes;
-                                      final seconds = duration.inSeconds % 60;
-                                      return Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 24, vertical: 12),
-                                        decoration: BoxDecoration(
-                                          color: Colors.red.withOpacity(0.1),
-                                          borderRadius:
-                                              BorderRadius.circular(20),
-                                        ),
-                                        child: Text(
-                                          '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .headlineMedium
-                                              ?.copyWith(
-                                                color: Colors.red,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                        ),
-                                      );
-                                    },
+                                    _recordingDuration.inSeconds > 0) ...[
+                                  AppSpacing.heightMd,
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: AppSpacing.lg,
+                                        vertical: AppSpacing.md),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.withOpacity(0.1),
+                                      borderRadius: AppBorderRadius.circularXl,
+                                    ),
+                                    child: Text(
+                                      '${_recordingDuration.inMinutes.toString().padLeft(2, '0')}:${(_recordingDuration.inSeconds % 60).toString().padLeft(2, '0')}',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .headlineMedium
+                                          ?.copyWith(
+                                            color: Colors.red,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                    ),
                                   ),
                                 ],
                               ],
@@ -743,7 +762,7 @@ class _RecordScreenState extends State<RecordScreen> {
                     ),
                     // Fixed buttons at bottom when recording
                     Container(
-                      padding: const EdgeInsets.all(24.0),
+                      padding: AppPadding.allLg,
                       decoration: BoxDecoration(
                         color: colorScheme.surface,
                         boxShadow: [
@@ -774,7 +793,7 @@ class _RecordScreenState extends State<RecordScreen> {
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 16),
+                            AppSpacing.widthMd,
                             Expanded(
                               child: ElevatedButton.icon(
                                 onPressed:
@@ -802,7 +821,7 @@ class _RecordScreenState extends State<RecordScreen> {
                   ],
                 )
               : SingleChildScrollView(
-                  padding: const EdgeInsets.all(24.0),
+                  padding: AppPadding.allLg,
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.start,
                     children: [
@@ -811,13 +830,13 @@ class _RecordScreenState extends State<RecordScreen> {
                         Container(
                           height: _isRecording ? 250 : 200,
                           width: double.infinity,
-                          margin: const EdgeInsets.symmetric(horizontal: 8),
+                          margin: AppPadding.horizontalSm,
                           constraints: BoxConstraints(
                             maxHeight:
                                 MediaQuery.of(context).size.height * 0.35,
                           ),
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: AppBorderRadius.circularLg,
                             border: Border.all(
                               color: _isRecording
                                   ? Colors.red.withOpacity(0.5)
@@ -841,7 +860,7 @@ class _RecordScreenState extends State<RecordScreen> {
                                   ],
                           ),
                           child: ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: AppBorderRadius.circularLg,
                             child: Stack(
                               children: [
                                 Image.file(
@@ -858,6 +877,7 @@ class _RecordScreenState extends State<RecordScreen> {
                                       icon: const Icon(Icons.close,
                                           color: Colors.white),
                                       onPressed: () {
+                                        HapticFeedback.lightImpact();
                                         setState(() {
                                           _selectedImage = null;
                                         });
@@ -876,10 +896,12 @@ class _RecordScreenState extends State<RecordScreen> {
                                     right: 8,
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(
-                                          horizontal: 12, vertical: 8),
+                                          horizontal: AppSpacing.md,
+                                          vertical: AppSpacing.sm),
                                       decoration: BoxDecoration(
                                         color: Colors.red.withOpacity(0.9),
-                                        borderRadius: BorderRadius.circular(20),
+                                        borderRadius:
+                                            AppBorderRadius.circularXl,
                                       ),
                                       child: Row(
                                         mainAxisSize: MainAxisSize.min,
@@ -888,7 +910,7 @@ class _RecordScreenState extends State<RecordScreen> {
                                         children: [
                                           const Icon(Icons.mic,
                                               color: Colors.white, size: 18),
-                                          const SizedBox(width: 8),
+                                          AppSpacing.widthSm,
                                           Text(
                                             isKorean
                                                 ? '이 사진에 대해 말해주세요'
@@ -912,11 +934,11 @@ class _RecordScreenState extends State<RecordScreen> {
                       if (widget.topicTitle != null) ...[
                         Card(
                           elevation: 4,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: AppBorderRadius.circularLg,
                           ),
                           child: Padding(
-                            padding: const EdgeInsets.all(20),
+                            padding: AppPadding.allMd,
                             child: Column(
                               children: [
                                 Text(
@@ -931,7 +953,7 @@ class _RecordScreenState extends State<RecordScreen> {
                                 ),
                                 if (widget.topicPrompt != null &&
                                     widget.topicPrompt!.isNotEmpty) ...[
-                                  const SizedBox(height: 12),
+                                  AppSpacing.heightMd,
                                   Text(
                                     widget.topicPrompt!,
                                     style: Theme.of(context)
@@ -948,22 +970,47 @@ class _RecordScreenState extends State<RecordScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 48),
+                        AppSpacing.heightXxl,
                       ],
                       // Image selection button (only when not recording and no image selected)
                       if (!_isRecording &&
                           !_isProcessing &&
                           _selectedImage == null) ...[
-                        OutlinedButton.icon(
-                          onPressed: () => _pickImage(ImageSource.gallery),
-                          icon: const Icon(Icons.image),
-                          label: Text(
-                            isKorean ? '이미지 선택' : 'Select Image',
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 24, vertical: 16),
-                          ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed: () {
+                                HapticFeedback.selectionClick();
+                                _pickImage(ImageSource.gallery);
+                              },
+                              icon: const Icon(Icons.image),
+                              label: Text(
+                                isKorean ? '갤러리' : 'Gallery',
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.md,
+                                    vertical: AppSpacing.md),
+                              ),
+                            ),
+                            AppSpacing.widthMd,
+                            OutlinedButton.icon(
+                              onPressed: () {
+                                HapticFeedback.selectionClick();
+                                _pickImage(ImageSource.camera);
+                              },
+                              icon: const Icon(Icons.camera_alt),
+                              label: Text(
+                                isKorean ? '카메라' : 'Camera',
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.md,
+                                    vertical: AppSpacing.md),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 24),
                       ],
@@ -982,8 +1029,9 @@ class _RecordScreenState extends State<RecordScreen> {
                         Column(
                           children: [
                             AnimatedContainer(
-                              duration: const Duration(milliseconds: 300),
-                              padding: EdgeInsets.all(_isRecording ? 20 : 24),
+                              duration: AppDurations.animationNormal,
+                              padding: EdgeInsets.all(
+                                  _isRecording ? AppSpacing.md : AppSpacing.lg),
                               decoration: BoxDecoration(
                                 color: _isRecording
                                     ? Colors.red.withOpacity(0.1)
@@ -1012,41 +1060,31 @@ class _RecordScreenState extends State<RecordScreen> {
                                   ),
                             ),
                             if (_isRecording &&
-                                _recordingStartTime != null) ...[
+                                _recordingDuration.inSeconds > 0) ...[
                               const SizedBox(height: 16),
-                              StreamBuilder<DateTime>(
-                                stream: Stream.periodic(
-                                    const Duration(seconds: 1),
-                                    (_) => DateTime.now()),
-                                builder: (context, snapshot) {
-                                  final duration = DateTime.now()
-                                      .difference(_recordingStartTime!);
-                                  final minutes = duration.inMinutes;
-                                  final seconds = duration.inSeconds % 60;
-                                  return Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 24, vertical: 12),
-                                    decoration: BoxDecoration(
-                                      color: Colors.red.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Text(
-                                      '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .headlineMedium
-                                          ?.copyWith(
-                                            color: Colors.red,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                    ),
-                                  );
-                                },
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.lg,
+                                    vertical: AppSpacing.md),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.withOpacity(0.1),
+                                  borderRadius: AppBorderRadius.circularXl,
+                                ),
+                                child: Text(
+                                  '${_recordingDuration.inMinutes.toString().padLeft(2, '0')}:${(_recordingDuration.inSeconds % 60).toString().padLeft(2, '0')}',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineMedium
+                                      ?.copyWith(
+                                        color: Colors.red,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                ),
                               ),
                             ],
                           ],
                         ),
-                      const SizedBox(height: 48),
+                      AppSpacing.heightXxl,
                       if (_isRecording)
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -1067,7 +1105,7 @@ class _RecordScreenState extends State<RecordScreen> {
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 16),
+                            AppSpacing.widthMd,
                             Expanded(
                               child: ElevatedButton.icon(
                                 onPressed:
@@ -1092,7 +1130,12 @@ class _RecordScreenState extends State<RecordScreen> {
                         )
                       else
                         ElevatedButton.icon(
-                          onPressed: _isProcessing ? null : _start,
+                          onPressed: _isProcessing
+                              ? null
+                              : () {
+                                  HapticFeedback.mediumImpact();
+                                  _start();
+                                },
                           icon: const Icon(Icons.mic, size: 24),
                           label: Text(
                             isKorean ? '녹음 시작' : 'Start Recording',

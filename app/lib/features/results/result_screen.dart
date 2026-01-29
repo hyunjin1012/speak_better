@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:pdf/pdf.dart';
@@ -7,9 +8,11 @@ import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/rendering.dart';
 import '../../models/session.dart';
 import '../../models/improve_result.dart' hide Feedback;
+import '../../utils/constants.dart';
 import '../../models/improve_result.dart' as models show Feedback;
 import '../../state/sessions_provider.dart';
 
@@ -41,17 +44,23 @@ class _ResultScreenState extends ConsumerState<ResultScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    
+
     // Load image from session if available, otherwise use provided imageFile
+    // Use async check after first frame to avoid blocking UI thread
     if (widget.session.imagePath != null) {
       final imageFile = File(widget.session.imagePath!);
-      if (imageFile.existsSync()) {
-        _imageFile = imageFile;
-      }
+      // Check asynchronously after build to avoid blocking initState
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (mounted && await imageFile.exists()) {
+          setState(() {
+            _imageFile = imageFile;
+          });
+        }
+      });
     } else if (widget.imageFile != null) {
       _imageFile = widget.imageFile;
     }
-    
+
     try {
       _result = ImproveResult.fromJson(widget.session.improveData);
     } catch (e) {
@@ -89,10 +98,17 @@ class _ResultScreenState extends ConsumerState<ResultScreen>
       }
     });
 
+    // Throttle position updates to reduce rebuilds (update every 100ms instead of continuously)
+    Timer? positionUpdateTimer;
     _audioPlayer.onPositionChanged.listen((position) {
       if (mounted) {
-        setState(() {
-          _position = position;
+        positionUpdateTimer?.cancel();
+        positionUpdateTimer = Timer(AppDurations.positionUpdateInterval, () {
+          if (mounted) {
+            setState(() {
+              _position = position;
+            });
+          }
         });
       }
     });
@@ -148,7 +164,9 @@ class _ResultScreenState extends ConsumerState<ResultScreen>
     try {
       if (_isPlaying) {
         await _audioPlayer.pause();
+        HapticFeedback.lightImpact();
       } else {
+        HapticFeedback.mediumImpact();
         await _audioPlayer.play(DeviceFileSource(widget.session.audioPath!));
       }
     } catch (e) {
@@ -452,7 +470,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen>
     final hasImage = _imageFile != null;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: AppPadding.allMd,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -460,22 +478,93 @@ class _ResultScreenState extends ConsumerState<ResultScreen>
           if (hasImage) ...[
             Card(
               elevation: 2,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.file(
-                  _imageFile!,
-                  fit: BoxFit.contain,
-                  width: double.infinity,
-                ),
+              child: FutureBuilder<bool>(
+                future: _imageFile!.exists(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Container(
+                      height: AppSizes.imageDisplay,
+                      padding: AppPadding.allLg,
+                      child: const Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                    );
+                  }
+                  if (!snapshot.hasData || !snapshot.data!) {
+                    return Container(
+                      height: AppSizes.imageDisplay,
+                      padding: AppPadding.allLg,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.broken_image,
+                            size: AppSizes.iconLg,
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                          AppSpacing.heightSm,
+                          Text(
+                            isKorean
+                                ? '이미지를 불러올 수 없습니다'
+                                : 'Failed to load image',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  return ClipRRect(
+                    borderRadius: AppBorderRadius.circularMd,
+                    child: Image.file(
+                      _imageFile!,
+                      fit: BoxFit.contain,
+                      width: double.infinity,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          height: AppSizes.imageDisplay,
+                          padding: AppPadding.allLg,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.broken_image,
+                                size: AppSizes.iconLg,
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                              AppSpacing.heightSm,
+                              Text(
+                                isKorean
+                                    ? '이미지를 불러올 수 없습니다'
+                                    : 'Failed to load image',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color:
+                                          Theme.of(context).colorScheme.error,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  );
+                },
               ),
             ),
-            const SizedBox(height: 16),
+            AppSpacing.heightMd,
           ],
           // Audio playback controls
           if (hasAudio) ...[
             Card(
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: AppPadding.allMd,
                 child: Column(
                   children: [
                     Row(
@@ -527,20 +616,22 @@ class _ResultScreenState extends ConsumerState<ResultScreen>
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            AppSpacing.heightMd,
           ],
           Text(
-            isKorean ? (hasImage ? '이미지 설명' : '원본') : (hasImage ? 'Image Description' : 'Original'),
+            isKorean
+                ? (hasImage ? '이미지 설명' : '원본')
+                : (hasImage ? 'Image Description' : 'Original'),
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 8),
           Card(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: AppPadding.allMd,
               child: Text(widget.session.transcript),
             ),
           ),
-          const SizedBox(height: 24),
+          AppSpacing.heightLg,
           Text(
             widget.session.language == 'ko' ? '개선된 텍스트' : 'Improved',
             style: Theme.of(context).textTheme.titleMedium,
@@ -549,7 +640,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen>
           Card(
             color: Colors.green.shade50,
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: AppPadding.allMd,
               child: Text(_result.improved),
             ),
           ),
@@ -560,7 +651,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen>
 
   Widget _buildAlternativesTab() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: AppPadding.allMd,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -591,7 +682,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen>
     return Card(
       color: color.shade50,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: AppPadding.allMd,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -612,7 +703,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen>
 
   Widget _buildFeedbackTab() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: AppPadding.allMd,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -629,7 +720,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen>
                     title: Text(s),
                   ),
                 )),
-            const SizedBox(height: 24),
+            AppSpacing.heightLg,
           ],
           if (_result.feedback.grammarFixes.isNotEmpty) ...[
             Text(
@@ -642,13 +733,13 @@ class _ResultScreenState extends ConsumerState<ResultScreen>
                     title: Text('${fix.from} → ${fix.to}'),
                     children: [
                       Padding(
-                        padding: const EdgeInsets.all(16),
+                        padding: AppPadding.allMd,
                         child: Text(fix.why),
                       ),
                     ],
                   ),
                 )),
-            const SizedBox(height: 24),
+            AppSpacing.heightLg,
           ],
           if (_result.feedback.vocabularyUpgrades.isNotEmpty) ...[
             Text(
@@ -661,13 +752,13 @@ class _ResultScreenState extends ConsumerState<ResultScreen>
                     title: Text('${upgrade.from} → ${upgrade.to}'),
                     children: [
                       Padding(
-                        padding: const EdgeInsets.all(16),
+                        padding: AppPadding.allMd,
                         child: Text(upgrade.why),
                       ),
                     ],
                   ),
                 )),
-            const SizedBox(height: 24),
+            AppSpacing.heightLg,
           ],
           if (_result.feedback.fillerWords.count > 0) ...[
             Text(
@@ -677,7 +768,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen>
             const SizedBox(height: 8),
             Card(
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: AppPadding.allMd,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

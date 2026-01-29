@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../state/flashcards_provider.dart';
+import '../../utils/constants.dart';
 import 'flashcard_review_screen.dart';
 
 class FlashcardsScreen extends ConsumerWidget {
@@ -15,9 +16,10 @@ class FlashcardsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final flashcards = ref.watch(flashcardsProvider);
     final isKorean = language == 'ko';
-    
+
     // Filter once and reuse
-    final languageCards = flashcards.where((f) => f.language == language).toList();
+    final languageCards =
+        flashcards.where((f) => f.language == language).toList();
     final notifier = ref.read(flashcardsProvider.notifier);
     final dueCards = notifier.getDueCards(language);
     final newCards = notifier.getNewCards(language);
@@ -32,7 +34,9 @@ class FlashcardsScreen extends ConsumerWidget {
             tooltip: isKorean ? '단어 추출' : 'Extract Words',
             onPressed: () async {
               // Extract vocabulary from all sessions
-              await ref.read(flashcardsProvider.notifier).extractVocabularyFromAllSessions();
+              await ref
+                  .read(flashcardsProvider.notifier)
+                  .extractVocabularyFromAllSessions();
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
@@ -62,7 +66,7 @@ class FlashcardsScreen extends ConsumerWidget {
                     Icons.auto_stories,
                   ),
                 ),
-                const SizedBox(width: 12),
+                AppSpacing.widthMd,
                 Expanded(
                   child: _buildStatCard(
                     context,
@@ -72,7 +76,7 @@ class FlashcardsScreen extends ConsumerWidget {
                     Icons.schedule,
                   ),
                 ),
-                const SizedBox(width: 12),
+                AppSpacing.widthMd,
                 Expanded(
                   child: _buildStatCard(
                     context,
@@ -89,7 +93,7 @@ class FlashcardsScreen extends ConsumerWidget {
           // Start review button or completion message
           if (dueCards.isNotEmpty || newCards.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              padding: AppPadding.horizontalMd,
               child: SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
@@ -97,7 +101,8 @@ class FlashcardsScreen extends ConsumerWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => FlashcardReviewScreen(language: language),
+                        builder: (context) =>
+                            FlashcardReviewScreen(language: language),
                       ),
                     );
                   },
@@ -111,7 +116,8 @@ class FlashcardsScreen extends ConsumerWidget {
             )
           else if (languageCards.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md, vertical: AppSpacing.sm),
               child: Card(
                 color: Colors.green.shade50,
                 child: Padding(
@@ -119,10 +125,10 @@ class FlashcardsScreen extends ConsumerWidget {
                   child: Row(
                     children: [
                       Icon(Icons.check_circle, color: Colors.green.shade700),
-                      const SizedBox(width: 12),
+                      AppSpacing.widthMd,
                       Expanded(
                         child: Text(
-                          isKorean 
+                          isKorean
                               ? '모든 카드를 복습했습니다! 다음 복습 날짜를 확인하세요.'
                               : 'All cards reviewed! Check next review dates.',
                           style: TextStyle(color: Colors.green.shade900),
@@ -143,28 +149,28 @@ class FlashcardsScreen extends ConsumerWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(
+                        const Icon(
                           Icons.auto_stories,
                           size: 64,
                           color: Colors.grey,
                         ),
-                        const SizedBox(height: 16),
+                        AppSpacing.heightMd,
                         Text(
-                          isKorean
-                              ? '아직 단어 카드가 없습니다'
-                              : 'No flashcards yet',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                color: Colors.grey,
-                              ),
+                          isKorean ? '아직 단어 카드가 없습니다' : 'No flashcards yet',
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    color: Colors.grey,
+                                  ),
                         ),
-                        const SizedBox(height: 8),
+                        AppSpacing.heightSm,
                         Text(
                           isKorean
                               ? '연습 세션에서 단어를 추출하세요'
                               : 'Extract words from practice sessions',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: Colors.grey,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Colors.grey,
+                                  ),
                         ),
                       ],
                     ),
@@ -175,7 +181,7 @@ class FlashcardsScreen extends ConsumerWidget {
                     itemBuilder: (context, index) {
                       final card = languageCards[index];
                       return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
+                        margin: const EdgeInsets.only(bottom: AppSpacing.md),
                         child: ListTile(
                           title: Text(
                             card.front,
@@ -194,15 +200,18 @@ class FlashcardsScreen extends ConsumerWidget {
                                 ),
                               ),
                               if (card.nextReview != null) ...[
-                                const SizedBox(height: 4),
+                                AppSpacing.heightXs,
                                 Text(
                                   isKorean
                                       ? '다음 복습: ${_formatDate(card.nextReview!, isKorean: isKorean)}'
                                       : 'Next review: ${_formatDate(card.nextReview!, isKorean: isKorean)}',
                                   style: TextStyle(
                                     fontSize: 11,
-                                    color: card.isDue ? Colors.red : Colors.grey,
-                                    fontWeight: card.isDue ? FontWeight.bold : FontWeight.normal,
+                                    color:
+                                        card.isDue ? Colors.red : Colors.grey,
+                                    fontWeight: card.isDue
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
                                   ),
                                 ),
                               ],
@@ -214,7 +223,8 @@ class FlashcardsScreen extends ConsumerWidget {
                               showDialog(
                                 context: context,
                                 builder: (context) => AlertDialog(
-                                  title: Text(isKorean ? '카드 삭제' : 'Delete Card'),
+                                  title:
+                                      Text(isKorean ? '카드 삭제' : 'Delete Card'),
                                   content: Text(isKorean
                                       ? '이 카드를 삭제하시겠습니까?'
                                       : 'Are you sure you want to delete this card?'),
@@ -225,7 +235,9 @@ class FlashcardsScreen extends ConsumerWidget {
                                     ),
                                     TextButton(
                                       onPressed: () {
-                                        ref.read(flashcardsProvider.notifier).deleteFlashcard(card.id);
+                                        ref
+                                            .read(flashcardsProvider.notifier)
+                                            .deleteFlashcard(card.id);
                                         Navigator.pop(context);
                                       },
                                       child: Text(isKorean ? '삭제' : 'Delete'),
@@ -285,7 +297,7 @@ class FlashcardsScreen extends ConsumerWidget {
     final today = DateTime(now.year, now.month, now.day);
     final reviewDate = DateTime(date.year, date.month, date.day);
     final difference = reviewDate.difference(today).inDays;
-    
+
     if (difference < 0) {
       return isKorean ? '지연됨' : 'Overdue';
     } else if (difference == 0) {
@@ -293,9 +305,7 @@ class FlashcardsScreen extends ConsumerWidget {
     } else if (difference == 1) {
       return isKorean ? '내일' : 'Tomorrow';
     } else {
-      return isKorean 
-          ? '$difference일 후'
-          : 'In $difference days';
+      return isKorean ? '$difference일 후' : 'In $difference days';
     }
   }
 }

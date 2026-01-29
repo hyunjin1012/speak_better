@@ -4,7 +4,7 @@ import 'dart:convert';
 class PracticeSession {
   PracticeSession({
     String? id,
-    required this.language, // 'ko' or 'en'
+    required this.language, // 'ko' or 'en' - the language being practiced (not UI language)
     required this.learnerMode, // 'korean_learner' or 'english_learner'
     this.topicId,
     this.audioPath,
@@ -25,7 +25,8 @@ class PracticeSession {
   final String improveJson;
   final DateTime createdAt;
 
-  Map<String, dynamic> get improveData => jsonDecode(improveJson) as Map<String, dynamic>;
+  Map<String, dynamic> get improveData =>
+      jsonDecode(improveJson) as Map<String, dynamic>;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -39,7 +40,8 @@ class PracticeSession {
         'createdAt': createdAt.toIso8601String(),
       };
 
-  factory PracticeSession.fromJson(Map<String, dynamic> json) => PracticeSession(
+  factory PracticeSession.fromJson(Map<String, dynamic> json) =>
+      PracticeSession(
         id: json['id'] as String,
         language: json['language'] as String,
         learnerMode: json['learnerMode'] as String,
@@ -51,4 +53,3 @@ class PracticeSession {
         createdAt: DateTime.parse(json['createdAt'] as String),
       );
 }
-

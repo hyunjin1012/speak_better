@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../utils/error_messages.dart';
+import '../../utils/constants.dart';
 import '../record/record_screen.dart';
 
 class ImageScreen extends StatefulWidget {
@@ -20,7 +21,7 @@ class ImageScreen extends StatefulWidget {
 
 class _ImageScreenState extends State<ImageScreen> {
   final _picker = ImagePicker();
-  
+
   File? _selectedImage;
   String? _errorMessage;
 
@@ -97,7 +98,7 @@ class _ImageScreenState extends State<ImageScreen> {
         ),
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(24.0),
+            padding: AppPadding.allLg,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -105,7 +106,7 @@ class _ImageScreenState extends State<ImageScreen> {
                 Card(
                   elevation: 2,
                   child: Padding(
-                    padding: const EdgeInsets.all(16.0),
+                    padding: AppPadding.allMd,
                     child: Column(
                       children: [
                         Icon(
@@ -125,7 +126,7 @@ class _ImageScreenState extends State<ImageScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
+                AppSpacing.heightLg,
 
                 // Image preview
                 Expanded(
@@ -170,7 +171,8 @@ class _ImageScreenState extends State<ImageScreen> {
                               top: 8,
                               right: 8,
                               child: IconButton(
-                                icon: const Icon(Icons.close, color: Colors.white),
+                                icon: const Icon(Icons.close,
+                                    color: Colors.white),
                                 onPressed: _removeImage,
                                 style: IconButton.styleFrom(
                                   backgroundColor: Colors.black54,
@@ -180,16 +182,16 @@ class _ImageScreenState extends State<ImageScreen> {
                           ],
                         ),
                 ),
-                const SizedBox(height: 24),
+                AppSpacing.heightLg,
 
                 // Error message
                 if (_errorMessage != null)
                   Container(
-                    padding: const EdgeInsets.all(12),
-                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: AppPadding.allMd,
+                    margin: const EdgeInsets.only(bottom: AppSpacing.md),
                     decoration: BoxDecoration(
                       color: Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: AppBorderRadius.circularSm,
                       border: Border.all(color: Colors.red.shade200),
                     ),
                     child: Row(
@@ -219,11 +221,11 @@ class _ImageScreenState extends State<ImageScreen> {
                               label: Text(isKorean ? '카메라' : 'Camera'),
                               style: OutlinedButton.styleFrom(
                                 padding: const EdgeInsets.symmetric(
-                                    vertical: 16),
+                                    vertical: AppSpacing.md),
                               ),
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          AppSpacing.widthMd,
                           Expanded(
                             child: OutlinedButton.icon(
                               onPressed: () => _pickImage(ImageSource.gallery),
@@ -231,7 +233,7 @@ class _ImageScreenState extends State<ImageScreen> {
                               label: Text(isKorean ? '갤러리' : 'Gallery'),
                               style: OutlinedButton.styleFrom(
                                 padding: const EdgeInsets.symmetric(
-                                    vertical: 16),
+                                    vertical: AppSpacing.md),
                               ),
                             ),
                           ),

@@ -1,9 +1,12 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../state/sessions_provider.dart';
 import '../../state/topics_provider.dart';
 import '../../models/topic.dart';
+import '../../utils/constants.dart';
+import '../../widgets/session_card.dart';
 import '../results/result_screen.dart';
 
 class HistoryScreen extends ConsumerStatefulWidget {
@@ -21,6 +24,7 @@ class HistoryScreen extends ConsumerStatefulWidget {
 class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  final Map<String, bool> _imageExistsCache = {};
 
   @override
   void dispose() {
@@ -54,225 +58,143 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                 .contains(_searchQuery.toLowerCase());
           }).toList();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.language == 'ko' ? '기록' : 'History'),
-      ),
-      body: Column(
-        children: [
-          // Search bar
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: widget.language == 'ko' ? '검색...' : 'Search...',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() => _searchQuery = '');
-                        },
-                      )
-                    : null,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+    return Column(
+      children: [
+        // Search bar
+        Padding(
+          padding: AppPadding.allMd,
+          child: TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: widget.language == 'ko' ? '검색...' : 'Search...',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _searchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                    )
+                  : null,
+              border: const OutlineInputBorder(
+                borderRadius: AppBorderRadius.circularMd,
               ),
-              onChanged: (value) {
-                setState(() => _searchQuery = value);
-              },
+            ),
+            onChanged: (value) {
+              setState(() => _searchQuery = value);
+            },
+          ),
+        ),
+        // Results count
+        if (_searchQuery.isNotEmpty)
+          Padding(
+            padding: AppPadding.horizontalMd,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                widget.language == 'ko'
+                    ? '${searchResults.length}개 결과'
+                    : '${searchResults.length} results',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
             ),
           ),
-          // Results count
-          if (_searchQuery.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  widget.language == 'ko'
-                      ? '${searchResults.length}개 결과'
-                      : '${searchResults.length} results',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-            ),
-          // Sessions list
-          Expanded(
-            child: searchResults.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          _searchQuery.isNotEmpty
-                              ? Icons.search_off
-                              : Icons.history,
-                          size: 64,
-                          color: Colors.grey,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          _searchQuery.isNotEmpty
-                              ? (widget.language == 'ko'
-                                  ? '검색 결과가 없습니다'
-                                  : 'No results found')
-                              : (widget.language == 'ko'
-                                  ? '기록이 없습니다'
-                                  : 'No history available'),
-                          style:
-                              Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    color: Colors.grey,
-                                  ),
+        // Sessions list
+        Expanded(
+          child: searchResults.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        _searchQuery.isNotEmpty
+                            ? Icons.search_off
+                            : Icons.history,
+                        size: AppSizes.iconXxl,
+                        color: Colors.grey,
+                      ),
+                      AppSpacing.heightMd,
+                      Text(
+                        _searchQuery.isNotEmpty
+                            ? (widget.language == 'ko'
+                                ? '검색 결과가 없습니다'
+                                : 'No results found')
+                            : (widget.language == 'ko'
+                                ? '기록이 없습니다'
+                                : 'No history available'),
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  color: Colors.grey,
+                                ),
+                      ),
+                      if (_searchQuery.isEmpty) ...[
+                        AppSpacing.heightLg,
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            HapticFeedback.mediumImpact();
+                            Navigator.pushNamed(context, '/topics');
+                          },
+                          icon: const Icon(Icons.mic),
+                          label: Text(widget.language == 'ko'
+                              ? '첫 녹음 시작하기'
+                              : 'Start Your First Recording'),
                         ),
                       ],
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
+                    ],
+                  ),
+                )
+              : RefreshIndicator(
+                  onRefresh: () async {
+                    HapticFeedback.lightImpact();
+                    // Refresh sessions
+                    ref.invalidate(sessionsProvider);
+                    await Future.delayed(AppDurations.refreshDelay);
+                  },
+                  child: ListView.builder(
+                    padding: AppPadding.allMd,
                     itemCount: searchResults.length,
                     itemBuilder: (context, index) {
                       final session = searchResults[index];
-                      final colorScheme = Theme.of(context).colorScheme;
                       final topic = getTopicById(session.topicId);
-                      return Card(
-                        elevation: 2,
-                        margin: const EdgeInsets.only(bottom: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: InkWell(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    ResultScreen(session: session),
-                              ),
-                            );
-                          },
-                          borderRadius: BorderRadius.circular(16),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Row(
-                              children: [
-                                // Show image thumbnail if available, otherwise show icon
-                                session.imagePath != null
-                                    ? ClipRRect(
-                                        borderRadius: BorderRadius.circular(12),
-                                        child: Image.file(
-                                          File(session.imagePath!),
-                                          width: 56,
-                                          height: 56,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (context, error, stackTrace) {
-                                            // Fallback to icon if image fails to load
-                                            return Container(
-                                              width: 56,
-                                              height: 56,
-                                              padding: const EdgeInsets.all(12),
-                                              decoration: BoxDecoration(
-                                                color: colorScheme.primaryContainer,
-                                                borderRadius: BorderRadius.circular(12),
-                                              ),
-                                              child: Icon(
-                                                topic?.isBuiltIn == true
-                                                    ? Icons.star
-                                                    : Icons.mic,
-                                                color: colorScheme.primary,
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      )
-                                    : Container(
-                                        padding: const EdgeInsets.all(12),
-                                        decoration: BoxDecoration(
-                                          color: colorScheme.primaryContainer,
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                        child: Icon(
-                                          topic?.isBuiltIn == true
-                                              ? Icons.star
-                                              : Icons.mic,
-                                          color: colorScheme.primary,
-                                        ),
-                                      ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      if (topic != null) ...[
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 8, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color:
-                                                colorScheme.secondaryContainer,
-                                            borderRadius:
-                                                BorderRadius.circular(8),
-                                          ),
-                                          child: Text(
-                                            topic.title,
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .labelSmall
-                                                ?.copyWith(
-                                                  color: colorScheme
-                                                      .onSecondaryContainer,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 6),
-                                      ],
-                                      Text(
-                                        session.transcript.length > 50
-                                            ? '${session.transcript.substring(0, 50)}...'
-                                            : session.transcript,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        '${session.createdAt.year}-${session.createdAt.month.toString().padLeft(2, '0')}-${session.createdAt.day.toString().padLeft(2, '0')} ${session.createdAt.hour.toString().padLeft(2, '0')}:${session.createdAt.minute.toString().padLeft(2, '0')}',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall
-                                            ?.copyWith(
-                                              color: colorScheme.onSurface
-                                                  .withOpacity(0.6),
-                                            ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline),
-                                  color: Colors.red,
-                                  onPressed: () =>
-                                      _deleteSession(context, ref, session.id),
-                                ),
-                              ],
+                      return SessionCard(
+                        session: session,
+                        topic: topic,
+                        imageExistsCache: _imageExistsCache,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  ResultScreen(session: session),
                             ),
-                          ),
-                        ),
+                          );
+                        },
+                        onDelete: () {
+                          _deleteSession(context, ref, session.id);
+                        },
                       );
                     },
                   ),
-          ),
-        ],
-      ),
+                ),
+        ),
+      ],
     );
+  }
+
+  Future<bool> _checkImageExists(String imagePath) async {
+    if (_imageExistsCache.containsKey(imagePath)) {
+      return _imageExistsCache[imagePath]!;
+    }
+    try {
+      final file = File(imagePath);
+      final exists = await file.exists();
+      _imageExistsCache[imagePath] = exists;
+      return exists;
+    } catch (e) {
+      _imageExistsCache[imagePath] = false;
+      return false;
+    }
   }
 
   void _deleteSession(BuildContext context, WidgetRef ref, String sessionId) {
@@ -291,6 +213,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
           ),
           TextButton(
             onPressed: () {
+              HapticFeedback.mediumImpact();
               ref.read(sessionsProvider.notifier).deleteSession(sessionId);
               Navigator.pop(context);
             },

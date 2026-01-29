@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/auth_service.dart';
 import '../../utils/error_messages.dart';
+import '../../utils/constants.dart';
+import '../../state/auth_provider.dart';
+import '../../main.dart' show createLanguageSelectionScreen;
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -47,7 +51,13 @@ class _LoginScreenState extends State<LoginScreen> {
           password: _passwordController.text,
         );
       }
-      // Navigation will be handled by auth state listener in main.dart
+      // After successful sign in, reset loading state
+      // The auth state listener in build() will handle navigation
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       setState(() {
         // Detect language from system locale or default to English
@@ -67,6 +77,39 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Listen to auth state changes - when user signs in, pop LoginScreen
+    // AuthWrapper will automatically rebuild and show LanguageSelectionScreen
+    ref.listen(authStateProvider, (previous, next) {
+      next.whenData((user) {
+        if (user != null && mounted) {
+          // User signed in successfully - reset loading state
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+            });
+          }
+          // Pop LoginScreen to return to AuthWrapper
+          // AuthWrapper will detect user is not null and show LanguageSelectionScreen
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              if (Navigator.of(context).canPop()) {
+                // LoginScreen is on top of AuthWrapper, pop it
+                Navigator.of(context).pop();
+              } else {
+                // LoginScreen is root (was pushed with pushAndRemoveUntil during sign out)
+                // Navigate directly to LanguageSelectionScreen
+                Navigator.of(context, rootNavigator: true).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (context) => createLanguageSelectionScreen(),
+                  ),
+                );
+              }
+            }
+          });
+        }
+      });
+    });
+
     final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
       body: Container(
@@ -83,7 +126,7 @@ class _LoginScreenState extends State<LoginScreen> {
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24.0),
+              padding: AppPadding.allLg,
               child: Form(
                 key: _formKey,
                 child: Column(
@@ -102,7 +145,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         color: colorScheme.primary,
                       ),
                     ),
-                    const SizedBox(height: 32),
+                    AppSpacing.heightXl,
                     Text(
                       _isSignUp ? 'Create Account' : 'Sign In',
                       style: TextStyle(
@@ -123,11 +166,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 32),
+                    AppSpacing.heightXl,
                     Card(
                       elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: AppBorderRadius.circularLg,
                       ),
                       child: Padding(
                         padding: const EdgeInsets.all(16),
@@ -140,8 +183,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                 labelText: 'Email',
                                 prefixIcon: Icon(Icons.email,
                                     color: colorScheme.primary),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                                border: const OutlineInputBorder(
+                                  borderRadius: AppBorderRadius.circularMd,
                                 ),
                                 filled: true,
                                 fillColor: colorScheme.surfaceContainerHighest,
@@ -156,7 +199,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 return null;
                               },
                             ),
-                            const SizedBox(height: 16),
+                            AppSpacing.heightMd,
                             TextFormField(
                               controller: _passwordController,
                               obscureText: true,
@@ -164,8 +207,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                 labelText: 'Password',
                                 prefixIcon: Icon(Icons.lock,
                                     color: colorScheme.primary),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                                border: const OutlineInputBorder(
+                                  borderRadius: AppBorderRadius.circularMd,
                                 ),
                                 filled: true,
                                 fillColor: colorScheme.surfaceContainerHighest,
@@ -207,7 +250,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ],
-                    const SizedBox(height: 24),
+                    AppSpacing.heightLg,
                     ElevatedButton(
                       onPressed: _isLoading ? null : _handleSubmit,
                       style: ElevatedButton.styleFrom(

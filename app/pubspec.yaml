@@ -1,10 +1,10 @@
 name: speakbetter_app
 description: A language learning app for Korean/English practice
-publish_to: 'none'
+publish_to: "none"
 version: 1.0.0+2
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
   flutter:
@@ -29,6 +29,7 @@ dependencies:
   flutter_local_notifications: ^17.2.2
   timezone: ^0.9.4
   image_picker: ^1.1.2
+  flutter_cache_manager: ^3.3.1
 
 dev_dependencies:
   flutter_test:
@@ -42,4 +43,3 @@ flutter:
 
 dependency_overrides:
   record_linux: ^1.2.1
-
