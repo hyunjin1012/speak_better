@@ -667,14 +667,32 @@ class _ResultScreenState extends ConsumerState<ResultScreen>
             ),
             const SizedBox(height: 8),
             ..._result.feedback.grammarFixes.map((fix) => Card(
-                  child: ExpansionTile(
-                    title: Text('${fix.from} → ${fix.to}'),
-                    children: [
-                      Padding(
-                        padding: AppPadding.allMd,
-                        child: Text(fix.why),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: AppBorderRadius.circularLg,
+                    side: BorderSide(
+                      color: Colors.grey.shade200,
+                      width: 1,
+                    ),
+                  ),
+                  child: Theme(
+                    data: Theme.of(context).copyWith(
+                      dividerColor: Colors.transparent,
+                    ),
+                    child: ExpansionTile(
+                      tilePadding: AppPadding.horizontalMd,
+                      childrenPadding: EdgeInsets.zero,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: AppBorderRadius.circularLg,
                       ),
-                    ],
+                      title: Text('${fix.from} → ${fix.to}'),
+                      children: [
+                        Padding(
+                          padding: AppPadding.allMd,
+                          child: Text(fix.why),
+                        ),
+                      ],
+                    ),
                   ),
                 )),
             AppSpacing.heightLg,
@@ -686,14 +704,32 @@ class _ResultScreenState extends ConsumerState<ResultScreen>
             ),
             const SizedBox(height: 8),
             ..._result.feedback.vocabularyUpgrades.map((upgrade) => Card(
-                  child: ExpansionTile(
-                    title: Text('${upgrade.from} → ${upgrade.to}'),
-                    children: [
-                      Padding(
-                        padding: AppPadding.allMd,
-                        child: Text(upgrade.why),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: AppBorderRadius.circularLg,
+                    side: BorderSide(
+                      color: Colors.grey.shade200,
+                      width: 1,
+                    ),
+                  ),
+                  child: Theme(
+                    data: Theme.of(context).copyWith(
+                      dividerColor: Colors.transparent,
+                    ),
+                    child: ExpansionTile(
+                      tilePadding: AppPadding.horizontalMd,
+                      childrenPadding: EdgeInsets.zero,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: AppBorderRadius.circularLg,
                       ),
-                    ],
+                      title: Text('${upgrade.from} → ${upgrade.to}'),
+                      children: [
+                        Padding(
+                          padding: AppPadding.allMd,
+                          child: Text(upgrade.why),
+                        ),
+                      ],
+                    ),
                   ),
                 )),
             AppSpacing.heightLg,
