@@ -146,25 +146,12 @@ class _TopicListScreenState extends ConsumerState<TopicListScreen> {
                               Container(
                                 padding: AppPadding.allMd,
                                 decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      colorScheme.primary,
-                                      colorScheme.primary.withOpacity(0.8),
-                                    ],
-                                  ),
+                                  color: colorScheme.primaryContainer,
                                   borderRadius: AppBorderRadius.circularMd,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color:
-                                          colorScheme.primary.withOpacity(0.3),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ],
                                 ),
                                 child: Icon(
                                   topic.isBuiltIn ? Icons.star : Icons.edit,
-                                  color: Colors.white,
+                                  color: colorScheme.primary,
                                   size: AppSizes.iconSm,
                                 ),
                               ),
