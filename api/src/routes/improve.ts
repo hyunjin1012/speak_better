@@ -1,4 +1,5 @@
-import { Router } from "express";
+import { Router, Request, Response, NextFunction } from "express";
+import express from "express";
 import { z } from "zod";
 import multer from "multer";
 import fs from "fs";
@@ -9,7 +10,7 @@ import { buildImproveInstructions } from "../lib/prompt.js";
 
 // Configure multer to handle multipart/form-data
 // Multer automatically parses text fields and puts them in req.body
-const upload = multer({ 
+const upload = multer({
   dest: path.join(process.cwd(), "uploads"),
   preservePath: true,
   // Ensure multer handles both file and text fields
@@ -38,16 +39,36 @@ const ImproveRequestSchema = z.object({
     .optional(),
 });
 
-improveRouter.post("/", upload.single("image"), async (req, res) => {
+// Middleware to parse JSON when Content-Type is application/json
+const jsonParser = express.json({ limit: "10mb" });
+
+// Middleware to conditionally apply JSON or multer based on Content-Type
+const handleImproveRequest = (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  const contentType = req.headers["content-type"] || "";
+
+  // If it's multipart/form-data, skip JSON parsing and use multer
+  if (contentType.includes("multipart/form-data")) {
+    return upload.single("image")(req, res, next);
+  }
+
+  // Otherwise, parse as JSON first, then continue
+  jsonParser(req, res, next);
+};
+
+improveRouter.post("/", handleImproveRequest, async (req, res) => {
   const imageFile: Express.Multer.File | undefined = req.file;
   try {
     // Log immediately to ensure we see this in logs
     console.log("=== IMPROVE REQUEST START ===");
-    console.log("Content-Type:", req.headers['content-type']);
+    console.log("Content-Type:", req.headers["content-type"]);
     console.log("Method:", req.method);
     console.log("Path:", req.path);
     let body = req.body;
-    
+
     console.log("=== IMPROVE REQUEST BODY ===");
     console.log("Has image file:", !!imageFile);
     if (imageFile) {
@@ -65,50 +86,58 @@ improveRouter.post("/", upload.single("image"), async (req, res) => {
     console.log("Body values:", {
       language: body?.language,
       learnerMode: body?.learnerMode,
-      transcript: body?.transcript ? `${body.transcript.substring(0, 50)}...` : undefined,
+      transcript: body?.transcript
+        ? `${body.transcript.substring(0, 50)}...`
+        : undefined,
       topic: body?.topic,
       preferences: body?.preferences,
     });
-    
+
     // Ensure body is an object
-    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
       console.warn("Body is not a valid object, initializing empty object");
       body = {};
     }
-    
+
     // If body is empty but we have an image, multer might not have parsed text fields
     if (Object.keys(body).length === 0 && imageFile) {
       console.error("ERROR: Body is empty but image file exists!");
-      console.error("This suggests multer did not parse text fields from multipart/form-data");
+      console.error(
+        "This suggests multer did not parse text fields from multipart/form-data",
+      );
       console.error("Request headers:", JSON.stringify(req.headers));
       return res.status(400).json({
         error: "Failed to parse form data",
-        details: "Text fields were not received. Please check Content-Type header.",
+        details:
+          "Text fields were not received. Please check Content-Type header.",
         debug: {
           hasImageFile: !!imageFile,
           bodyKeys: Object.keys(body),
-          contentType: req.headers['content-type'],
+          contentType: req.headers["content-type"],
         },
       });
     }
-    
+
     // Parse JSON fields if they were sent as strings (from multipart form)
     try {
-      if (typeof body.topic === 'string' && body.topic.trim() !== '') {
+      if (typeof body.topic === "string" && body.topic.trim() !== "") {
         body.topic = JSON.parse(body.topic);
       }
-      if (typeof body.preferences === 'string' && body.preferences.trim() !== '') {
+      if (
+        typeof body.preferences === "string" &&
+        body.preferences.trim() !== ""
+      ) {
         body.preferences = JSON.parse(body.preferences);
       }
     } catch (parseError: any) {
       console.error("JSON parse error:", parseError);
       // If parsing fails, set to undefined
-      if (typeof body.topic === 'string') body.topic = undefined;
-      if (typeof body.preferences === 'string') body.preferences = undefined;
+      if (typeof body.topic === "string") body.topic = undefined;
+      if (typeof body.preferences === "string") body.preferences = undefined;
     }
-    
+
     console.log("Parsed body:", body);
-    
+
     // Validate required fields before parsing
     if (!body.language || !body.learnerMode || !body.transcript) {
       console.error("Missing required fields:", {
@@ -129,20 +158,23 @@ improveRouter.post("/", upload.single("image"), async (req, res) => {
         },
       });
     }
-    
+
     // Try to parse with Zod schema
     let parsed;
     try {
       parsed = ImproveRequestSchema.parse(body);
     } catch (zodError: any) {
       console.error("Zod validation error:", zodError);
-      console.error("Body that failed validation:", JSON.stringify(body, null, 2));
+      console.error(
+        "Body that failed validation:",
+        JSON.stringify(body, null, 2),
+      );
       return res.status(400).json({
         error: zodError.errors || zodError.message || "Validation failed",
         details: zodError.errors,
       });
     }
-    
+
     // Log the transcript being processed
     console.log("=== IMPROVE REQUEST ===");
     console.log("Transcript received:", parsed.transcript);
@@ -150,7 +182,7 @@ improveRouter.post("/", upload.single("image"), async (req, res) => {
     console.log("Language:", parsed.language);
     console.log("Learner mode:", parsed.learnerMode);
     console.log("Has image:", !!imageFile);
-    
+
     // Prepare image data if provided (for direct viewing by AI)
     let imageData: { base64: string; mimeType: string } | null = null;
     if (imageFile) {
@@ -165,7 +197,7 @@ improveRouter.post("/", upload.single("image"), async (req, res) => {
         // Continue without image if preparation fails
       }
     }
-    
+
     const instructions = buildImproveInstructions({
       language: parsed.language,
       learnerMode: parsed.learnerMode,
@@ -174,7 +206,9 @@ improveRouter.post("/", upload.single("image"), async (req, res) => {
       transcript: parsed.transcript,
       tone: parsed.preferences?.tone,
       length: parsed.preferences?.length,
-      imageDescription: imageData ? "Image provided - AI can see the image directly" : undefined,
+      imageDescription: imageData
+        ? "Image provided - AI can see the image directly"
+        : undefined,
     });
 
     // Build user message content - include image if available
@@ -184,9 +218,10 @@ improveRouter.post("/", upload.single("image"), async (req, res) => {
     > = [
       {
         type: "text",
-        text: parsed.language === "ko"
-          ? `다음은 사용자가 이미지에 대해 말한 내용입니다. 이미지를 직접 보고 정확하게 평가해주세요:\n\n"${parsed.transcript}"`
-          : `The following is what the user said about the image. Please view the image directly and evaluate accurately:\n\n"${parsed.transcript}"`,
+        text:
+          parsed.language === "ko"
+            ? `다음은 사용자가 이미지에 대해 말한 내용입니다. 이미지를 직접 보고 정확하게 평가해주세요:\n\n"${parsed.transcript}"`
+            : `The following is what the user said about the image. Please view the image directly and evaluate accurately:\n\n"${parsed.transcript}"`,
       },
     ];
 
@@ -232,7 +267,12 @@ improveRouter.post("/", upload.single("image"), async (req, res) => {
               feedback: {
                 type: "object",
                 additionalProperties: false,
-                required: ["summary", "grammar_fixes", "vocabulary_upgrades", "filler_words"],
+                required: [
+                  "summary",
+                  "grammar_fixes",
+                  "vocabulary_upgrades",
+                  "filler_words",
+                ],
                 properties: {
                   summary: {
                     type: "array",
@@ -299,11 +339,13 @@ improveRouter.post("/", upload.single("image"), async (req, res) => {
     try {
       json = JSON.parse(text);
     } catch {
-      return res.status(500).json({ error: "Model did not return valid JSON." });
+      return res
+        .status(500)
+        .json({ error: "Model did not return valid JSON." });
     }
 
     const validated = ImproveResultSchema.parse(json);
-    
+
     // Clean up image file after processing
     if (imageFile) {
       try {
@@ -312,7 +354,7 @@ improveRouter.post("/", upload.single("image"), async (req, res) => {
         console.error("Failed to delete image file:", e);
       }
     }
-    
+
     return res.json(validated);
   } catch (err: any) {
     // Clean up image file on error too
@@ -328,30 +370,29 @@ improveRouter.post("/", upload.single("image"), async (req, res) => {
     console.error("Error name:", err?.name);
     console.error("Error message:", err?.message);
     console.error("Error stack:", err?.stack);
-    
+
     // Handle Zod validation errors
-    if (err?.name === 'ZodError') {
+    if (err?.name === "ZodError") {
       console.error("Validation errors:", err.errors);
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: "Invalid request data",
         details: err.errors,
       });
     }
-    
+
     // Handle OpenAI API errors
     if (err?.response) {
       console.error("OpenAI API error:", err.response.data);
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: "AI service error",
         details: err.response.data?.error?.message || err.message,
       });
     }
-    
+
     const msg = err?.message ?? "Improve failed";
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: msg,
       details: err?.details || err?.error?.message,
     });
   }
 });
-
