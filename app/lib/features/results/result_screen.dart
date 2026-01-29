@@ -99,17 +99,21 @@ class _ResultScreenState extends ConsumerState<ResultScreen>
     });
 
     // Throttle position updates to reduce rebuilds (update every 100ms instead of continuously)
-    Timer? positionUpdateTimer;
+    DateTime? lastUpdateTime;
     _audioPlayer.onPositionChanged.listen((position) {
       if (mounted) {
-        positionUpdateTimer?.cancel();
-        positionUpdateTimer = Timer(AppDurations.positionUpdateInterval, () {
-          if (mounted) {
-            setState(() {
-              _position = position;
-            });
-          }
-        });
+        final now = DateTime.now();
+        // Update immediately if enough time has passed since last update, or if this is the first update
+        if (lastUpdateTime == null ||
+            now
+                    .difference(lastUpdateTime!)
+                    .compareTo(AppDurations.positionUpdateInterval) >=
+                0) {
+          lastUpdateTime = now;
+          setState(() {
+            _position = position;
+          });
+        }
       }
     });
 
@@ -167,7 +171,18 @@ class _ResultScreenState extends ConsumerState<ResultScreen>
         HapticFeedback.lightImpact();
       } else {
         HapticFeedback.mediumImpact();
+        // Reset position when starting playback
+        setState(() {
+          _position = Duration.zero;
+        });
         await _audioPlayer.play(DeviceFileSource(widget.session.audioPath!));
+        // Get duration immediately after starting playback
+        final duration = await _audioPlayer.getDuration();
+        if (duration != null && mounted) {
+          setState(() {
+            _duration = duration;
+          });
+        }
       }
     } catch (e) {
       print('Audio playback error: $e');
@@ -478,85 +493,8 @@ class _ResultScreenState extends ConsumerState<ResultScreen>
           if (hasImage) ...[
             Card(
               elevation: 2,
-              child: FutureBuilder<bool>(
-                future: _imageFile!.exists(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return Container(
-                      height: AppSizes.imageDisplay,
-                      padding: AppPadding.allLg,
-                      child: const Center(
-                        child: CircularProgressIndicator(),
-                      ),
-                    );
-                  }
-                  if (!snapshot.hasData || !snapshot.data!) {
-                    return Container(
-                      height: AppSizes.imageDisplay,
-                      padding: AppPadding.allLg,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.broken_image,
-                            size: AppSizes.iconLg,
-                            color: Theme.of(context).colorScheme.error,
-                          ),
-                          AppSpacing.heightSm,
-                          Text(
-                            isKorean
-                                ? '이미지를 불러올 수 없습니다'
-                                : 'Failed to load image',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(
-                                  color: Theme.of(context).colorScheme.error,
-                                ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-                  return ClipRRect(
-                    borderRadius: AppBorderRadius.circularMd,
-                    child: Image.file(
-                      _imageFile!,
-                      fit: BoxFit.contain,
-                      width: double.infinity,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          height: AppSizes.imageDisplay,
-                          padding: AppPadding.allLg,
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.broken_image,
-                                size: AppSizes.iconLg,
-                                color: Theme.of(context).colorScheme.error,
-                              ),
-                              AppSpacing.heightSm,
-                              Text(
-                                isKorean
-                                    ? '이미지를 불러올 수 없습니다'
-                                    : 'Failed to load image',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
-                                      color:
-                                          Theme.of(context).colorScheme.error,
-                                    ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  );
-                },
-              ),
+              child: _ImageDisplayWidget(
+                  imageFile: _imageFile!, isKorean: isKorean),
             ),
             AppSpacing.heightMd,
           ],
@@ -793,6 +731,125 @@ class _ResultScreenState extends ConsumerState<ResultScreen>
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// Widget to display image with cached existence check to prevent flickering
+class _ImageDisplayWidget extends StatefulWidget {
+  final File imageFile;
+  final bool isKorean;
+
+  const _ImageDisplayWidget({
+    required this.imageFile,
+    required this.isKorean,
+  });
+
+  @override
+  State<_ImageDisplayWidget> createState() => _ImageDisplayWidgetState();
+}
+
+class _ImageDisplayWidgetState extends State<_ImageDisplayWidget> {
+  bool? _cachedExists;
+  bool _isChecking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkImageExists();
+  }
+
+  Future<void> _checkImageExists() async {
+    if (_isChecking) return;
+
+    _isChecking = true;
+    try {
+      final exists = await widget.imageFile.exists();
+      if (mounted) {
+        setState(() {
+          _cachedExists = exists;
+          _isChecking = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _cachedExists = false;
+          _isChecking = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Show loading placeholder while checking
+    if (_cachedExists == null || _isChecking) {
+      return Container(
+        height: AppSizes.imageDisplay,
+        padding: AppPadding.allLg,
+        child: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    // Show placeholder if file doesn't exist
+    if (!_cachedExists!) {
+      return Container(
+        height: AppSizes.imageDisplay,
+        padding: AppPadding.allLg,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.broken_image,
+              size: AppSizes.iconLg,
+              color: Theme.of(context).colorScheme.error,
+            ),
+            AppSpacing.heightSm,
+            Text(
+              widget.isKorean ? '이미지를 불러올 수 없습니다' : 'Failed to load image',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Show image
+    return ClipRRect(
+      borderRadius: AppBorderRadius.circularMd,
+      child: Image.file(
+        widget.imageFile,
+        fit: BoxFit.contain,
+        width: double.infinity,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            height: AppSizes.imageDisplay,
+            padding: AppPadding.allLg,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.broken_image,
+                  size: AppSizes.iconLg,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                AppSpacing.heightSm,
+                Text(
+                  widget.isKorean ? '이미지를 불러올 수 없습니다' : 'Failed to load image',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

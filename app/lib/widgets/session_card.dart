@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -42,50 +41,70 @@ class SessionCard extends ConsumerWidget {
         );
 
     return Card(
-      elevation: AppElevation.low,
+      elevation: 0,
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
-      shape: const RoundedRectangleBorder(
+      shape: RoundedRectangleBorder(
         borderRadius: AppBorderRadius.circularLg,
+        side: BorderSide(
+          color: Colors.grey.shade200,
+          width: 1,
+        ),
       ),
-      child: InkWell(
-        onTap: () {
-          HapticFeedback.selectionClick();
-          onTap?.call();
-        },
-        borderRadius: AppBorderRadius.circularLg,
-        child: Padding(
-          padding: AppPadding.allMd,
-          child: Row(
-            children: [
-              // Image thumbnail or icon
-              _buildThumbnail(context, displayTopic, colorScheme),
-              AppSpacing.widthMd,
-              // Content
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (displayTopic.title.isNotEmpty) ...[
-                      _buildTopicBadge(context, displayTopic, colorScheme),
-                      AppSpacing.heightSm,
-                    ],
-                    _buildTranscript(context),
-                    AppSpacing.heightXs,
-                    _buildTimestamp(context, colorScheme),
-                  ],
-                ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            HapticFeedback.selectionClick();
+            onTap?.call();
+          },
+          borderRadius: AppBorderRadius.circularLg,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: AppBorderRadius.circularLg,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.white,
+                  colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                ],
               ),
-              // Delete button
-              if (onDelete != null)
-                IconButton(
-                  icon: const Icon(Icons.delete_outline),
-                  color: Colors.red,
-                  onPressed: () {
-                    HapticFeedback.mediumImpact();
-                    onDelete?.call();
-                  },
-                ),
-            ],
+            ),
+            child: Padding(
+              padding: AppPadding.allMd,
+              child: Row(
+                children: [
+                  // Image thumbnail or icon
+                  _buildThumbnail(context, displayTopic, colorScheme),
+                  AppSpacing.widthMd,
+                  // Content
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (displayTopic.title.isNotEmpty) ...[
+                          _buildTopicBadge(context, displayTopic, colorScheme),
+                          AppSpacing.heightSm,
+                        ],
+                        _buildTranscript(context),
+                        AppSpacing.heightXs,
+                        _buildTimestamp(context, colorScheme),
+                      ],
+                    ),
+                  ),
+                  // Delete button
+                  if (onDelete != null)
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline),
+                      color: Colors.red.shade400,
+                      onPressed: () {
+                        HapticFeedback.mediumImpact();
+                        onDelete?.call();
+                      },
+                    ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -120,12 +139,24 @@ class SessionCard extends ConsumerWidget {
     return Container(
       padding: AppPadding.allSm,
       decoration: BoxDecoration(
-        color: colorScheme.primaryContainer,
+        gradient: LinearGradient(
+          colors: [
+            colorScheme.primary,
+            colorScheme.primary.withOpacity(0.8),
+          ],
+        ),
         borderRadius: AppBorderRadius.circularMd,
+        boxShadow: [
+          BoxShadow(
+            color: colorScheme.primary.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Icon(
         topic.isBuiltIn ? Icons.star : Icons.mic,
-        color: colorScheme.primary,
+        color: Colors.white,
         size: AppSizes.iconMd,
       ),
     );

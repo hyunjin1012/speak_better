@@ -32,20 +32,39 @@ class _TopicListScreenState extends ConsumerState<TopicListScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  Icons.topic,
-                  size: 64,
-                  color:
-                      Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+                Container(
+                  padding: const EdgeInsets.all(32),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .primaryContainer
+                        .withOpacity(0.3),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.topic,
+                    size: 80,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                 ),
-                AppSpacing.heightMd,
+                AppSpacing.heightLg,
                 Text(
                   widget.language == 'ko' ? '주제가 없습니다' : 'No topics available',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface,
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                AppSpacing.heightSm,
+                Text(
+                  widget.language == 'ko'
+                      ? '새 주제를 추가하여 시작하세요'
+                      : 'Add a new topic to get started',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context)
                             .colorScheme
                             .onSurface
-                            .withOpacity(0.5),
+                            .withOpacity(0.6),
                       ),
                 ),
               ],
@@ -57,105 +76,162 @@ class _TopicListScreenState extends ConsumerState<TopicListScreen> {
             itemBuilder: (context, index) {
               final topic = filteredTopics[index];
               final colorScheme = Theme.of(context).colorScheme;
-              return Card(
-                elevation: 2,
-                margin: const EdgeInsets.only(bottom: AppSpacing.md),
-                shape: const RoundedRectangleBorder(
-                  borderRadius: AppBorderRadius.circularLg,
-                ),
-                child: InkWell(
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => RecordScreen(
-                          language: widget.language,
-                          learnerMode: widget.learnerMode,
-                          topicId: topic.id,
-                          topicTitle: topic.title,
-                          topicPrompt: topic.prompt,
+              return TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0.0, end: 1.0),
+                duration: Duration(milliseconds: 300 + (index * 50)),
+                curve: Curves.easeOut,
+                builder: (context, value, child) {
+                  return Transform.translate(
+                    offset: Offset(0, 20 * (1 - value)),
+                    child: Opacity(
+                      opacity: value,
+                      child: child,
+                    ),
+                  );
+                },
+                child: Card(
+                  elevation: 0,
+                  margin: const EdgeInsets.only(bottom: AppSpacing.md),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: AppBorderRadius.circularLg,
+                    side: BorderSide(
+                      color: Colors.grey.shade200,
+                      width: 1,
+                    ),
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        Navigator.push(
+                          context,
+                          PageRouteBuilder(
+                            pageBuilder:
+                                (context, animation, secondaryAnimation) =>
+                                    RecordScreen(
+                              language: widget.language,
+                              learnerMode: widget.learnerMode,
+                              topicId: topic.id,
+                              topicTitle: topic.title,
+                              topicPrompt: topic.prompt,
+                            ),
+                            transitionsBuilder: (context, animation,
+                                secondaryAnimation, child) {
+                              return FadeTransition(
+                                opacity: animation,
+                                child: child,
+                              );
+                            },
+                          ),
+                        );
+                      },
+                      borderRadius: AppBorderRadius.circularLg,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: AppBorderRadius.circularLg,
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              Colors.white,
+                              colorScheme.primaryContainer.withOpacity(0.1),
+                            ],
+                          ),
+                        ),
+                        child: Padding(
+                          padding: AppPadding.allMd,
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: AppPadding.allMd,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      colorScheme.primary,
+                                      colorScheme.primary.withOpacity(0.8),
+                                    ],
+                                  ),
+                                  borderRadius: AppBorderRadius.circularMd,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color:
+                                          colorScheme.primary.withOpacity(0.3),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: Icon(
+                                  topic.isBuiltIn ? Icons.star : Icons.edit,
+                                  color: Colors.white,
+                                  size: AppSizes.iconSm,
+                                ),
+                              ),
+                              AppSpacing.widthMd,
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      topic.title,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                    ),
+                                    if (topic.prompt.isNotEmpty) ...[
+                                      AppSpacing.heightXs,
+                                      Text(
+                                        topic.prompt,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: colorScheme.onSurface
+                                                  .withOpacity(0.7),
+                                            ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                              if (!topic.isBuiltIn)
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.edit_outlined),
+                                      color: colorScheme.primary,
+                                      onPressed: () {
+                                        HapticFeedback.selectionClick();
+                                        _showEditTopicDialog(context, topic);
+                                      },
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline),
+                                      color: Colors.red,
+                                      onPressed: () {
+                                        HapticFeedback.mediumImpact();
+                                        _deleteTopic(context, topic.id);
+                                      },
+                                    ),
+                                  ],
+                                )
+                              else
+                                Icon(
+                                  Icons.arrow_forward_ios,
+                                  size: 16,
+                                  color: colorScheme.onSurface.withOpacity(0.5),
+                                ),
+                            ],
+                          ),
                         ),
                       ),
-                    );
-                  },
-                  borderRadius: AppBorderRadius.circularLg,
-                  child: Padding(
-                    padding: AppPadding.allMd,
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: AppPadding.allMd,
-                          decoration: BoxDecoration(
-                            color: colorScheme.primaryContainer,
-                            borderRadius: AppBorderRadius.circularMd,
-                          ),
-                          child: Icon(
-                            topic.isBuiltIn ? Icons.star : Icons.edit,
-                            color: colorScheme.primary,
-                          ),
-                        ),
-                        AppSpacing.widthMd,
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                topic.title,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleMedium
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                              ),
-                              if (topic.prompt.isNotEmpty) ...[
-                                AppSpacing.heightXs,
-                                Text(
-                                  topic.prompt,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.copyWith(
-                                        color: colorScheme.onSurface
-                                            .withOpacity(0.7),
-                                      ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        if (!topic.isBuiltIn)
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.edit_outlined),
-                                color: colorScheme.primary,
-                                onPressed: () {
-                                  HapticFeedback.selectionClick();
-                                  _showEditTopicDialog(context, topic);
-                                },
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.delete_outline),
-                                color: Colors.red,
-                                onPressed: () {
-                                  HapticFeedback.mediumImpact();
-                                  _deleteTopic(context, topic.id);
-                                },
-                              ),
-                            ],
-                          )
-                        else
-                          Icon(
-                            Icons.arrow_forward_ios,
-                            size: 16,
-                            color: colorScheme.onSurface.withOpacity(0.5),
-                          ),
-                      ],
                     ),
                   ),
                 ),

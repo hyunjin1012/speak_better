@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/notification_service.dart';
 import '../../features/tutorial/tutorial_overlay.dart';
 import '../../state/preferences_provider.dart';
+import '../../utils/constants.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class NotificationSettingsScreen extends ConsumerStatefulWidget {
@@ -282,15 +283,49 @@ class _NotificationSettingsScreenState
               children: [
                 // Enable/Disable switch
                 Card(
-                  child: SwitchListTile(
-                    title: Text(
-                        isKorean ? '일일 연습 알림' : 'Daily Practice Reminders'),
-                    subtitle: Text(isKorean
-                        ? '매일 연습하도록 알림을 받으세요'
-                        : 'Get reminded to practice every day'),
-                    value: _notificationsEnabled,
-                    onChanged: _toggleNotifications,
-                    secondary: const Icon(Icons.notifications),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: AppBorderRadius.circularLg,
+                    side: BorderSide(
+                      color: Colors.grey.shade200,
+                      width: 1,
+                    ),
+                  ),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: AppBorderRadius.circularLg,
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Colors.white,
+                          Theme.of(context)
+                              .colorScheme
+                              .primaryContainer
+                              .withOpacity(0.2),
+                        ],
+                      ),
+                    ),
+                    child: SwitchListTile(
+                      title: Text(
+                          isKorean ? '일일 연습 알림' : 'Daily Practice Reminders'),
+                      subtitle: Text(isKorean
+                          ? '매일 연습하도록 알림을 받으세요'
+                          : 'Get reminded to practice every day'),
+                      value: _notificationsEnabled,
+                      onChanged: _toggleNotifications,
+                      secondary: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.notifications,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
