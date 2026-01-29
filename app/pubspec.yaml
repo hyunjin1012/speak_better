@@ -30,6 +30,7 @@ dependencies:
   timezone: ^0.9.4
   image_picker: ^1.1.2
   flutter_cache_manager: ^3.3.1
+  connectivity_plus: ^6.0.5
 
 dev_dependencies:
   flutter_test:

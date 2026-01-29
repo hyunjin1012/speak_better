@@ -3,10 +3,14 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import '../config.dart';
 import '../services/auth_service.dart';
+import '../services/connectivity_service.dart';
 
 class SpeakBetterApi {
-  SpeakBetterApi({AuthService? authService})
-      : _authService = authService ?? AuthService(),
+  SpeakBetterApi({
+    AuthService? authService,
+    ConnectivityService? connectivityService,
+  })  : _authService = authService ?? AuthService(),
+        _connectivityService = connectivityService ?? ConnectivityService(),
         _dio = Dio(BaseOptions(
           baseUrl: AppConfig.apiBaseUrl,
           connectTimeout: const Duration(seconds: 20),
@@ -45,12 +49,29 @@ class SpeakBetterApi {
   }
 
   final AuthService _authService;
+  final ConnectivityService _connectivityService;
   final Dio _dio;
+
+  /// Check if device is online before making API calls
+  Future<void> _checkConnectivity() async {
+    final isOnline = await _connectivityService.isOnline();
+    if (!isOnline) {
+      throw DioException(
+        requestOptions: RequestOptions(path: ''),
+        error: 'No internet connection',
+        type: DioExceptionType.connectionError,
+        message: '인터넷 연결이 필요합니다. 네트워크 연결을 확인해주세요.',
+      );
+    }
+  }
 
   Future<Map<String, dynamic>> transcribe({
     required File audioFile,
     required String language, // 'ko'|'en'|'auto'
   }) async {
+    // Check connectivity before making API call
+    await _checkConnectivity();
+
     // Get the actual file extension from the file path
     final filePath = audioFile.path;
     final extension = filePath.split('.').last.toLowerCase();
@@ -82,6 +103,9 @@ class SpeakBetterApi {
     Map<String, dynamic>? topic,
     Map<String, dynamic>? preferences,
   }) async {
+    // Check connectivity before making API call
+    await _checkConnectivity();
+
     if (imageFile != null) {
       // If image is provided, send as multipart form
       final filePath = imageFile.path;
@@ -99,7 +123,8 @@ class SpeakBetterApi {
 
       // Debug: Log form data fields
       print('=== SENDING FORMDATA ===');
-      print('FormData fields: language=$language, learnerMode=$learnerMode, transcriptLength=${transcript.length}');
+      print(
+          'FormData fields: language=$language, learnerMode=$learnerMode, transcriptLength=${transcript.length}');
       print('Has image: true');
       print('FormData fields count: ${form.fields.length}');
       print('FormData files count: ${form.files.length}');
@@ -132,6 +157,9 @@ class SpeakBetterApi {
     required String language, // 'ko'|'en'
     required String learnerMode, // 'korean_learner'|'english_learner'
   }) async {
+    // Check connectivity before making API call
+    await _checkConnectivity();
+
     final filePath = imageFile.path;
     final extension = filePath.split('.').last.toLowerCase();
     final filename = 'image.$extension';

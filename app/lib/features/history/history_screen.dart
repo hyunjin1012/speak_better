@@ -5,8 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../state/sessions_provider.dart';
 import '../../state/topics_provider.dart';
 import '../../models/topic.dart';
+import '../../models/session.dart';
 import '../../utils/constants.dart';
 import '../../widgets/session_card.dart';
+import '../../widgets/skeleton_loader.dart';
 import '../results/result_screen.dart';
 
 class HistoryScreen extends ConsumerStatefulWidget {
@@ -25,11 +27,56 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   final Map<String, bool> _imageExistsCache = {};
+  static const int _itemsPerPage = 20;
+  int _currentPage = 0;
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent * 0.9) {
+      // Load more when 90% scrolled
+      _loadMore();
+    }
+  }
+
+  void _loadMore() {
+    final sessions = ref.read(sessionsProvider);
+    final filteredSessions =
+        sessions.where((s) => s.language == widget.language).toList();
+    final searchResults = _searchQuery.isEmpty
+        ? filteredSessions
+        : filteredSessions.where((session) {
+            return session.transcript
+                .toLowerCase()
+                .contains(_searchQuery.toLowerCase());
+          }).toList();
+
+    final totalPages = (searchResults.length / _itemsPerPage).ceil();
+    if (_currentPage < totalPages - 1) {
+      setState(() {
+        _currentPage++;
+      });
+    }
+  }
+
+  List<PracticeSession> _getPaginatedSessions(List<PracticeSession> sessions) {
+    const startIndex = 0;
+    final endIndex = (_currentPage + 1) * _itemsPerPage;
+    return sessions.sublist(
+        startIndex, endIndex > sessions.length ? sessions.length : endIndex);
   }
 
   @override
@@ -58,6 +105,10 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                 .contains(_searchQuery.toLowerCase());
           }).toList();
 
+    // Get paginated results
+    final paginatedResults = _getPaginatedSessions(searchResults);
+    final hasMore = paginatedResults.length < searchResults.length;
+
     return Column(
       children: [
         // Search bar
@@ -82,7 +133,10 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
               ),
             ),
             onChanged: (value) {
-              setState(() => _searchQuery = value);
+              setState(() {
+                _searchQuery = value;
+                _currentPage = 0; // Reset pagination when search changes
+              });
             },
           ),
         ),
@@ -152,10 +206,18 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                     await Future.delayed(AppDurations.refreshDelay);
                   },
                   child: ListView.builder(
+                    controller: _scrollController,
                     padding: AppPadding.allMd,
-                    itemCount: searchResults.length,
+                    itemCount: paginatedResults.length + (hasMore ? 1 : 0),
                     itemBuilder: (context, index) {
-                      final session = searchResults[index];
+                      if (index == paginatedResults.length) {
+                        // Loading indicator at the end
+                        return const Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      final session = paginatedResults[index];
                       final topic = getTopicById(session.topicId);
                       return SessionCard(
                         session: session,

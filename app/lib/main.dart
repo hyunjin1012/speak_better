@@ -18,6 +18,7 @@ import 'state/auth_provider.dart';
 import 'state/stats_provider.dart';
 import 'state/achievements_provider.dart';
 import 'state/flashcards_provider.dart';
+import 'widgets/offline_banner.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -68,7 +69,20 @@ class SpeakBetterApp extends StatelessWidget {
           elevation: 0,
         ),
       ),
-      home: const AuthWrapper(),
+      home: const Scaffold(
+        body: Stack(
+          children: [
+            AuthWrapper(),
+            // Offline banner at the top
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: OfflineBanner(),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

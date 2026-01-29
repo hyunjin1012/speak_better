@@ -8,14 +8,17 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import 'package:dio/dio.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../../api/speakbetter_api.dart';
 import '../../models/session.dart';
 import '../../utils/error_messages.dart';
 import '../../utils/constants.dart';
+import '../../widgets/offline_banner.dart' show connectivityProvider;
 import 'dart:convert';
 import '../results/result_screen.dart';
 
-class RecordScreen extends StatefulWidget {
+class RecordScreen extends ConsumerStatefulWidget {
   const RecordScreen({
     super.key,
     required this.language, // 'ko' or 'en'
@@ -34,10 +37,10 @@ class RecordScreen extends StatefulWidget {
   final String? initialImagePath;
 
   @override
-  State<RecordScreen> createState() => _RecordScreenState();
+  ConsumerState<RecordScreen> createState() => _RecordScreenState();
 }
 
-class _RecordScreenState extends State<RecordScreen> {
+class _RecordScreenState extends ConsumerState<RecordScreen> {
   final _recorder = AudioRecorder();
   final _api = SpeakBetterApi();
   final _imagePicker = ImagePicker();
@@ -567,6 +570,10 @@ class _RecordScreenState extends State<RecordScreen> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isKorean = widget.language == 'ko';
+    final connectivityAsync = ref.watch(connectivityProvider);
+    final isOffline =
+        connectivityAsync.valueOrNull?.contains(ConnectivityResult.none) ??
+            false;
 
     return Scaffold(
       appBar: AppBar(
@@ -1130,15 +1137,20 @@ class _RecordScreenState extends State<RecordScreen> {
                         )
                       else
                         ElevatedButton.icon(
-                          onPressed: _isProcessing
+                          onPressed: (_isProcessing || isOffline)
                               ? null
                               : () {
                                   HapticFeedback.mediumImpact();
                                   _start();
                                 },
-                          icon: const Icon(Icons.mic, size: 24),
+                          icon: Icon(
+                            isOffline ? Icons.wifi_off : Icons.mic,
+                            size: 24,
+                          ),
                           label: Text(
-                            isKorean ? '녹음 시작' : 'Start Recording',
+                            isOffline
+                                ? (isKorean ? '오프라인 모드' : 'Offline Mode')
+                                : (isKorean ? '녹음 시작' : 'Start Recording'),
                             style: const TextStyle(
                                 fontSize: 18, fontWeight: FontWeight.bold),
                           ),

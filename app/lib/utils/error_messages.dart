@@ -4,10 +4,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 /// Utility class for user-friendly error messages
 class ErrorMessages {
   /// Get user-friendly error message for Firebase Auth exceptions
-  static String getAuthErrorMessage(FirebaseAuthException e, {bool isKorean = false}) {
+  static String getAuthErrorMessage(FirebaseAuthException e,
+      {bool isKorean = false}) {
     switch (e.code) {
       case 'weak-password':
-        return isKorean 
+        return isKorean
             ? '비밀번호가 너무 약합니다. 더 강한 비밀번호를 사용해주세요.'
             : 'The password provided is too weak. Please use a stronger password.';
       case 'email-already-in-use':
@@ -19,9 +20,7 @@ class ErrorMessages {
             ? '이 이메일로 등록된 계정을 찾을 수 없습니다.'
             : 'No user found for that email.';
       case 'wrong-password':
-        return isKorean
-            ? '비밀번호가 올바르지 않습니다.'
-            : 'Wrong password provided.';
+        return isKorean ? '비밀번호가 올바르지 않습니다.' : 'Wrong password provided.';
       case 'invalid-email':
         return isKorean
             ? '이메일 주소 형식이 올바르지 않습니다.'
@@ -51,6 +50,23 @@ class ErrorMessages {
 
   /// Get user-friendly error message for API/Dio exceptions
   static String getApiErrorMessage(dynamic error, {bool isKorean = false}) {
+    // Check for connectivity/offline errors
+    if (error is DioException) {
+      if (error.type == DioExceptionType.connectionError ||
+          error.type == DioExceptionType.connectionTimeout ||
+          error.message?.contains('No internet') == true ||
+          error.message?.contains('인터넷 연결') == true) {
+        return isKorean
+            ? '인터넷 연결이 필요합니다. 네트워크 연결을 확인해주세요.'
+            : 'Internet connection required. Please check your network connection.';
+      }
+      if (error.type == DioExceptionType.receiveTimeout ||
+          error.type == DioExceptionType.sendTimeout) {
+        return isKorean
+            ? '요청 시간이 초과되었습니다. 네트워크 연결을 확인하고 다시 시도해주세요.'
+            : 'Request timed out. Please check your network connection and try again.';
+      }
+    }
     if (error is DioException) {
       switch (error.type) {
         case DioExceptionType.connectionTimeout:
@@ -62,19 +78,15 @@ class ErrorMessages {
         case DioExceptionType.badResponse:
           final statusCode = error.response?.statusCode;
           final errorData = error.response?.data;
-          
+
           if (statusCode == 401) {
             return isKorean
                 ? '인증에 실패했습니다. 다시 로그인해주세요.'
                 : 'Authentication failed. Please sign in again.';
           } else if (statusCode == 403) {
-            return isKorean
-                ? '권한이 없습니다.'
-                : 'Permission denied.';
+            return isKorean ? '권한이 없습니다.' : 'Permission denied.';
           } else if (statusCode == 404) {
-            return isKorean
-                ? '요청한 리소스를 찾을 수 없습니다.'
-                : 'Resource not found.';
+            return isKorean ? '요청한 리소스를 찾을 수 없습니다.' : 'Resource not found.';
           } else if (statusCode == 500) {
             return isKorean
                 ? '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
@@ -88,25 +100,23 @@ class ErrorMessages {
             String? errorMessage;
             String? details;
             if (errorData is Map) {
-              errorMessage = errorData['error']?.toString() ?? 
-                           errorData['message']?.toString();
+              errorMessage = errorData['error']?.toString() ??
+                  errorData['message']?.toString();
               details = errorData['details']?.toString();
             } else if (errorData is String) {
               errorMessage = errorData;
             }
-            
+
             final fullMessage = details != null && details != errorMessage
                 ? '$errorMessage: $details'
                 : errorMessage ?? '알 수 없는 오류';
-            
+
             return isKorean
                 ? '오류가 발생했습니다: $fullMessage'
                 : 'An error occurred: $fullMessage';
           }
         case DioExceptionType.cancel:
-          return isKorean
-              ? '요청이 취소되었습니다.'
-              : 'Request was cancelled.';
+          return isKorean ? '요청이 취소되었습니다.' : 'Request was cancelled.';
         case DioExceptionType.unknown:
         default:
           if (error.error?.toString().contains('SocketException') == true ||
@@ -120,7 +130,7 @@ class ErrorMessages {
               : 'Network error occurred. Please check your connection.';
       }
     }
-    
+
     // Generic error
     final errorString = error.toString();
     if (errorString.contains('network') || errorString.contains('connection')) {
@@ -128,7 +138,7 @@ class ErrorMessages {
           ? '네트워크 연결을 확인해주세요.'
           : 'Please check your network connection.';
     }
-    
+
     return isKorean
         ? '오류가 발생했습니다. 다시 시도해주세요.'
         : 'An error occurred. Please try again.';

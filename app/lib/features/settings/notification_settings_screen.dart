@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/notification_service.dart';
+import '../../features/tutorial/tutorial_overlay.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class NotificationSettingsScreen extends ConsumerStatefulWidget {
@@ -12,10 +13,12 @@ class NotificationSettingsScreen extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<NotificationSettingsScreen> createState() => _NotificationSettingsScreenState();
+  ConsumerState<NotificationSettingsScreen> createState() =>
+      _NotificationSettingsScreenState();
 }
 
-class _NotificationSettingsScreenState extends ConsumerState<NotificationSettingsScreen> {
+class _NotificationSettingsScreenState
+    extends ConsumerState<NotificationSettingsScreen> {
   final NotificationService _notificationService = NotificationService();
   bool _notificationsEnabled = false;
   TimeOfDay _selectedTime = const TimeOfDay(hour: 18, minute: 0);
@@ -29,16 +32,16 @@ class _NotificationSettingsScreenState extends ConsumerState<NotificationSetting
 
   Future<void> _loadSettings() async {
     setState(() => _loading = true);
-    
+
     // Initialize notification service first
     await _notificationService.initialize();
-    
+
     // Check if notifications are enabled using the service's method (more reliable)
     final hasPermission = await _notificationService.checkPermissions();
     setState(() {
       _notificationsEnabled = hasPermission;
     });
-    
+
     setState(() => _loading = false);
   }
 
@@ -48,10 +51,10 @@ class _NotificationSettingsScreenState extends ConsumerState<NotificationSetting
     if (enabled) {
       // Ensure notification service is initialized
       await _notificationService.initialize();
-      
+
       // Check current permission status using the service's method
       var hasPermission = await _notificationService.checkPermissions();
-      
+
       if (!hasPermission) {
         // Request permission
         hasPermission = await _notificationService.requestPermissions();
@@ -60,7 +63,7 @@ class _NotificationSettingsScreenState extends ConsumerState<NotificationSetting
         // Check status again
         hasPermission = await _notificationService.checkPermissions();
       }
-      
+
       if (hasPermission) {
         await _notificationService.scheduleDailyNotifications(
           hour: _selectedTime.hour,
@@ -70,7 +73,7 @@ class _NotificationSettingsScreenState extends ConsumerState<NotificationSetting
         setState(() {
           _notificationsEnabled = true;
         });
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -105,7 +108,8 @@ class _NotificationSettingsScreenState extends ConsumerState<NotificationSetting
                       Navigator.pop(context);
                       openAppSettings();
                     },
-                    child: Text(widget.language == 'ko' ? '설정 열기' : 'Open Settings'),
+                    child: Text(
+                        widget.language == 'ko' ? '설정 열기' : 'Open Settings'),
                   ),
                 ],
               ),
@@ -133,7 +137,7 @@ class _NotificationSettingsScreenState extends ConsumerState<NotificationSetting
       setState(() {
         _notificationsEnabled = false;
       });
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -153,12 +157,12 @@ class _NotificationSettingsScreenState extends ConsumerState<NotificationSetting
       context: context,
       initialTime: _selectedTime,
     );
-    
+
     if (picked != null && picked != _selectedTime) {
       setState(() {
         _selectedTime = picked;
       });
-      
+
       // Update notifications if enabled
       if (_notificationsEnabled) {
         await _notificationService.scheduleDailyNotifications(
@@ -166,7 +170,7 @@ class _NotificationSettingsScreenState extends ConsumerState<NotificationSetting
           minute: _selectedTime.minute,
           language: widget.language,
         );
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -178,6 +182,66 @@ class _NotificationSettingsScreenState extends ConsumerState<NotificationSetting
         }
       }
     }
+  }
+
+  void _showTutorial(BuildContext context) {
+    final isKorean = widget.language == 'ko';
+
+    showTutorialOverlay(
+      context,
+      steps: [
+        TutorialStep(
+          title: isKorean ? '환영합니다!' : 'Welcome!',
+          description: isKorean
+              ? 'Speak Better에 오신 것을 환영합니다. 이 튜토리얼을 통해 앱의 주요 기능을 알아보세요.'
+              : 'Welcome to Speak Better! This tutorial will help you learn about the app\'s main features.',
+        ),
+        TutorialStep(
+          title: isKorean ? '주제 선택' : 'Select a Topic',
+          description: isKorean
+              ? '주제 탭에서 연습할 주제를 선택하거나 새 주제를 추가할 수 있습니다.'
+              : 'In the Topics tab, you can select a topic to practice or add a new custom topic.',
+        ),
+        TutorialStep(
+          title: isKorean ? '녹음하기' : 'Record Your Speech',
+          description: isKorean
+              ? '주제를 선택한 후 녹음 버튼을 눌러 연습을 시작하세요. AI가 당신의 발음을 분석하고 피드백을 제공합니다.'
+              : 'After selecting a topic, tap the record button to start practicing. AI will analyze your speech and provide feedback.',
+        ),
+        TutorialStep(
+          title: isKorean ? '이미지 연습' : 'Image Practice',
+          description: isKorean
+              ? '이미지 아이콘을 눌러 사진을 선택하고, 그 사진에 대해 설명하면 AI가 이미지를 참고하여 더 정확한 피드백을 제공합니다.'
+              : 'Tap the image icon to select a photo. Describe the image and AI will provide feedback considering the image context.',
+        ),
+        TutorialStep(
+          title: isKorean ? '기록 보기' : 'View History',
+          description: isKorean
+              ? '기록 탭에서 모든 연습 세션을 확인하고, 검색 기능을 사용하여 특정 세션을 찾을 수 있습니다.'
+              : 'In the History tab, you can view all your practice sessions and use the search feature to find specific sessions.',
+        ),
+        TutorialStep(
+          title: isKorean ? '알림 설정' : 'Notification Settings',
+          description: isKorean
+              ? '설정에서 일일 연습 알림을 활성화하여 매일 연습하는 습관을 만들 수 있습니다.'
+              : 'Enable daily practice reminders in Settings to build a daily practice habit.',
+        ),
+        TutorialStep(
+          title: isKorean ? '완료!' : 'All Set!',
+          description: isKorean
+              ? '이제 앱을 사용할 준비가 되었습니다. 즐거운 연습 되세요!'
+              : 'You\'re all set! Start practicing and improve your language skills.',
+        ),
+      ],
+      language: widget.language,
+      onComplete: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isKorean ? '튜토리얼을 완료했습니다!' : 'Tutorial completed!'),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -196,7 +260,8 @@ class _NotificationSettingsScreenState extends ConsumerState<NotificationSetting
                 // Enable/Disable switch
                 Card(
                   child: SwitchListTile(
-                    title: Text(isKorean ? '일일 연습 알림' : 'Daily Practice Reminders'),
+                    title: Text(
+                        isKorean ? '일일 연습 알림' : 'Daily Practice Reminders'),
                     subtitle: Text(isKorean
                         ? '매일 연습하도록 알림을 받으세요'
                         : 'Get reminded to practice every day'),
@@ -206,7 +271,7 @@ class _NotificationSettingsScreenState extends ConsumerState<NotificationSetting
                   ),
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Time picker
                 Card(
                   child: ListTile(
@@ -222,7 +287,23 @@ class _NotificationSettingsScreenState extends ConsumerState<NotificationSetting
                   ),
                 ),
                 const SizedBox(height: 24),
-                
+
+                // Tutorial button
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.school),
+                    title: Text(isKorean ? '앱 사용법 보기' : 'View Tutorial'),
+                    subtitle: Text(isKorean
+                        ? '앱의 주요 기능을 알아보세요'
+                        : 'Learn about the app\'s main features'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      _showTutorial(context);
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
+
                 // Info card
                 Card(
                   color: Colors.blue.shade50,
@@ -233,11 +314,15 @@ class _NotificationSettingsScreenState extends ConsumerState<NotificationSetting
                       children: [
                         Row(
                           children: [
-                            Icon(Icons.info_outline, color: Colors.blue.shade700),
+                            Icon(Icons.info_outline,
+                                color: Colors.blue.shade700),
                             const SizedBox(width: 8),
                             Text(
                               isKorean ? '알림 정보' : 'About Notifications',
-                              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleSmall
+                                  ?.copyWith(
                                     fontWeight: FontWeight.bold,
                                     color: Colors.blue.shade700,
                                   ),
