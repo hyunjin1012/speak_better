@@ -218,10 +218,13 @@ improveRouter.post("/", handleImproveRequest, async (req, res) => {
     > = [
       {
         type: "text",
-        text:
-          parsed.language === "ko"
+        text: imageData
+          ? parsed.language === "ko"
             ? `다음은 사용자가 이미지에 대해 말한 내용입니다. 이미지를 직접 보고 정확하게 평가해주세요:\n\n"${parsed.transcript}"`
-            : `The following is what the user said about the image. Please view the image directly and evaluate accurately:\n\n"${parsed.transcript}"`,
+            : `The following is what the user said about the image. Please view the image directly and evaluate accurately:\n\n"${parsed.transcript}"`
+          : parsed.language === "ko"
+            ? `다음은 사용자가 말한 내용입니다. 이를 개선해주세요:\n\n"${parsed.transcript}"`
+            : `The following is what the user said. Please improve it:\n\n"${parsed.transcript}"`,
       },
     ];
 
