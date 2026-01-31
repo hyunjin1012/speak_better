@@ -20,8 +20,47 @@ class NotificationService {
 
     // Initialize timezone
     tz.initializeTimeZones();
-    tz.setLocalLocation(tz
-        .getLocation('America/New_York')); // Default, can be made configurable
+
+    // Detect device's local timezone
+    // DateTime.now() gives us the device's local time, and we can infer the timezone
+    // by checking the offset from UTC
+    final now = DateTime.now();
+    final utcNow = now.toUtc();
+    final offset = now.difference(utcNow);
+    final offsetHours = offset.inHours;
+
+    // Map UTC offset to IANA timezone (approximate, but covers most US timezones)
+    // PST/PDT: UTC-8 (standard) / UTC-7 (daylight)
+    // EST/EDT: UTC-5 (standard) / UTC-4 (daylight)
+    // MST/MDT: UTC-7 (standard) / UTC-6 (daylight)
+    // CST/CDT: UTC-6 (standard) / UTC-5 (daylight)
+    try {
+      String timezoneName;
+      if (offsetHours == -8 || offsetHours == -7) {
+        // Pacific Time (PST/PDT)
+        timezoneName = 'America/Los_Angeles';
+      } else if (offsetHours == -5 || offsetHours == -4) {
+        // Eastern Time (EST/EDT)
+        timezoneName = 'America/New_York';
+      } else if (offsetHours == -7 || offsetHours == -6) {
+        // Check if it's Mountain or Pacific (both can be -7/-6)
+        // Default to Mountain for -7/-6, but this is approximate
+        timezoneName = 'America/Denver';
+      } else if (offsetHours == -6 || offsetHours == -5) {
+        // Central Time (CST/CDT)
+        timezoneName = 'America/Chicago';
+      } else {
+        // For other timezones, try to use the system default
+        // Don't override - let tz.local use device's system timezone
+        return;
+      }
+
+      tz.setLocalLocation(tz.getLocation(timezoneName));
+      print('Set timezone to: $timezoneName (UTC offset: $offsetHours hours)');
+    } catch (e) {
+      // If timezone setting fails, don't override - use device default
+      print('Could not set timezone, using device default: $e');
+    }
 
     // Android initialization settings
     const androidSettings =
