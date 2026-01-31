@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/stats.dart';
 import '../models/session.dart';
 import '../data/local_store.dart';
+import 'achievement_celebration_provider.dart';
 import 'package:intl/intl.dart';
 
 final statsProvider = StateNotifierProvider<StatsNotifier, UserStats>((ref) {
@@ -9,18 +10,21 @@ final statsProvider = StateNotifierProvider<StatsNotifier, UserStats>((ref) {
 });
 
 class StatsNotifier extends StateNotifier<UserStats> {
-  StatsNotifier() : super(UserStats(
-    currentStreak: 0,
-    longestStreak: 0,
-    totalSessions: 0,
-    totalPracticeDays: 0,
-  )) {
+  int _previousStreak = 0;
+
+  StatsNotifier()
+      : super(UserStats(
+          currentStreak: 0,
+          longestStreak: 0,
+          totalSessions: 0,
+          totalPracticeDays: 0,
+        )) {
     _calculateStats();
   }
 
   void _calculateStats() {
     final sessions = LocalStore.getAllSessions();
-    
+
     if (sessions.isEmpty) {
       state = UserStats(
         currentStreak: 0,
@@ -84,7 +88,7 @@ class StatsNotifier extends StateNotifier<UserStats> {
 
     for (final dateKey in practiceDates.reversed) {
       final date = DateTime.parse(dateKey);
-      
+
       if (lastDate == null) {
         tempStreak = 1;
       } else {
@@ -111,6 +115,20 @@ class StatsNotifier extends StateNotifier<UserStats> {
     // Get last practice date
     final lastSession = sessions.first; // Already sorted by date desc
     final lastPracticeDate = lastSession.createdAt;
+
+    // Check for streak milestones (7, 30, 50, 100 days)
+    final milestoneStreaks = [7, 30, 50, 100];
+    if (_previousStreak < currentStreak) {
+      for (final milestone in milestoneStreaks) {
+        if (_previousStreak < milestone && currentStreak >= milestone) {
+          // Trigger streak milestone celebration
+          // Note: We'll need to access the provider ref, but we don't have it here
+          // We'll handle this in the UI layer instead
+          break;
+        }
+      }
+    }
+    _previousStreak = currentStreak;
 
     state = UserStats(
       currentStreak: currentStreak,

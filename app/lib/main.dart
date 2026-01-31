@@ -20,7 +20,11 @@ import 'state/stats_provider.dart';
 import 'state/achievements_provider.dart';
 import 'state/flashcards_provider.dart';
 import 'state/preferences_provider.dart';
+import 'state/achievement_celebration_provider.dart';
 import 'widgets/offline_banner.dart';
+import 'widgets/achievement_celebration.dart';
+import 'widgets/streak_indicator.dart';
+import 'features/record/record_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -580,6 +584,31 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     return Consumer(
       builder: (context, ref, _) {
         final authService = ref.read(authServiceProvider);
+
+        // Listen for newly unlocked achievements
+        ref.listen(newlyUnlockedAchievementProvider, (previous, next) {
+          if (next != null && previous != next) {
+            // Show celebration dialog
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (context.mounted) {
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (context) => AchievementCelebrationDialog(
+                    achievement: next,
+                    language: language,
+                  ),
+                );
+                // Clear the newly unlocked achievement after showing
+                Future.delayed(const Duration(milliseconds: 100), () {
+                  ref.read(newlyUnlockedAchievementProvider.notifier).state =
+                      null;
+                });
+              }
+            });
+          }
+        });
+
         return DefaultTabController(
           length: 2,
           child: Builder(
@@ -752,36 +781,6 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                             );
                           },
                         ),
-                        // Streak display
-                        Consumer(
-                          builder: (context, ref, _) {
-                            final stats = ref.watch(statsProvider);
-                            if (stats.currentStreak > 0) {
-                              return Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 8.0),
-                                child: Center(
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.local_fire_department,
-                                          color: Colors.orange, size: 20),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        '${stats.currentStreak}',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 16,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            }
-                            return const SizedBox.shrink();
-                          },
-                        ),
                         Builder(
                           builder: (dialogContext) {
                             return IconButton(
@@ -869,14 +868,100 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                         ],
                       ),
                     ),
-                    body: TabBarView(
+                    body: Column(
                       children: [
-                        TopicListScreen(
-                          language: language,
-                          learnerMode: learnerMode,
+                        // Enhanced Streak Indicator at top
+                        Consumer(
+                          builder: (context, ref, _) {
+                            final stats = ref.watch(statsProvider);
+                            final previousStreak =
+                                ref.read(streakMilestoneProvider);
+
+                            // Check for streak milestones (only when streak increases)
+                            // Defer provider modifications to avoid build-time errors
+                            if (previousStreak != null &&
+                                stats.currentStreak > previousStreak) {
+                              final milestoneStreaks = [7, 30, 50, 100];
+                              for (final milestone in milestoneStreaks) {
+                                if (previousStreak < milestone &&
+                                    stats.currentStreak >= milestone) {
+                                  // Show streak celebration after build
+                                  WidgetsBinding.instance
+                                      .addPostFrameCallback((_) {
+                                    if (context.mounted) {
+                                      showDialog(
+                                        context: context,
+                                        barrierDismissible: false,
+                                        builder: (context) =>
+                                            StreakCelebrationDialog(
+                                          streak: stats.currentStreak,
+                                          language: language,
+                                        ),
+                                      );
+                                    }
+                                  });
+                                  break;
+                                }
+                              }
+                            }
+
+                            // Update previous streak after build
+                            if (previousStreak != stats.currentStreak) {
+                              Future.microtask(() {
+                                ref
+                                    .read(streakMilestoneProvider.notifier)
+                                    .state = stats.currentStreak;
+                              });
+                            }
+
+                            return StreakIndicator(
+                              stats: stats,
+                              language: language,
+                              onTap: () {
+                                // Optional: Navigate to progress screen
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        ProgressScreen(language: language),
+                                  ),
+                                );
+                              },
+                            );
+                          },
                         ),
-                        HistoryScreen(language: language),
+                        // Tab content
+                        Expanded(
+                          child: TabBarView(
+                            children: [
+                              TopicListScreen(
+                                language: language,
+                                learnerMode: learnerMode,
+                              ),
+                              HistoryScreen(language: language),
+                            ],
+                          ),
+                        ),
                       ],
+                    ),
+                    // Quick Record FAB
+                    floatingActionButton: FloatingActionButton.extended(
+                      onPressed: () {
+                        HapticFeedback.mediumImpact();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => RecordScreen(
+                              language: language,
+                              learnerMode: learnerMode,
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.mic),
+                      label: Text(isKorean ? '녹음 시작' : 'Start Recording'),
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
                     ),
                   );
                 },

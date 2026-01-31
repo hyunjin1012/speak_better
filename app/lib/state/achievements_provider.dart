@@ -2,9 +2,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/achievement.dart';
 import '../data/local_store.dart';
 import 'stats_provider.dart';
+import 'achievement_celebration_provider.dart';
 import 'dart:convert';
 
-final achievementsProvider = StateNotifierProvider<AchievementsNotifier, List<Achievement>>((ref) {
+final achievementsProvider =
+    StateNotifierProvider<AchievementsNotifier, List<Achievement>>((ref) {
   return AchievementsNotifier(ref);
 });
 
@@ -92,7 +94,7 @@ class AchievementsNotifier extends StateNotifier<List<Achievement>> {
     // Load saved achievements
     final savedAchievements = _loadSavedAchievements();
     final achievementsMap = <String, Achievement>{};
-    
+
     for (final achievement in savedAchievements) {
       achievementsMap[achievement.id] = achievement;
     }
@@ -101,7 +103,7 @@ class AchievementsNotifier extends StateNotifier<List<Achievement>> {
     final updatedAchievements = state.map((achievement) {
       // Get saved version if exists
       final saved = achievementsMap[achievement.id] ?? achievement;
-      
+
       int progress = 0;
       bool shouldUnlock = false;
 
@@ -143,7 +145,8 @@ class AchievementsNotifier extends StateNotifier<List<Achievement>> {
             try {
               final improveData = session.improveData;
               final feedback = improveData['feedback'] as Map<String, dynamic>?;
-              final vocabUpgrades = feedback?['vocabulary_upgrades'] as List? ?? [];
+              final vocabUpgrades =
+                  feedback?['vocabulary_upgrades'] as List? ?? [];
               vocabCount += vocabUpgrades.length;
             } catch (e) {
               // Ignore parsing errors
@@ -163,29 +166,42 @@ class AchievementsNotifier extends StateNotifier<List<Achievement>> {
           final now = DateTime.now();
           int daysPracticed = 0;
           final practiceDates = <String>{};
-          
+
           for (final session in sessions) {
-            final dateKey = '${session.createdAt.year}-${session.createdAt.month.toString().padLeft(2, '0')}-${session.createdAt.day.toString().padLeft(2, '0')}';
+            final dateKey =
+                '${session.createdAt.year}-${session.createdAt.month.toString().padLeft(2, '0')}-${session.createdAt.day.toString().padLeft(2, '0')}';
             practiceDates.add(dateKey);
           }
 
           for (int i = 0; i < 7; i++) {
             final checkDate = now.subtract(Duration(days: i));
-            final dateKey = '${checkDate.year}-${checkDate.month.toString().padLeft(2, '0')}-${checkDate.day.toString().padLeft(2, '0')}';
+            final dateKey =
+                '${checkDate.year}-${checkDate.month.toString().padLeft(2, '0')}-${checkDate.day.toString().padLeft(2, '0')}';
             if (practiceDates.contains(dateKey)) {
               daysPracticed++;
             }
           }
-          
+
           progress = daysPracticed;
           shouldUnlock = daysPracticed >= 7 && saved.unlockedAt == null;
           break;
       }
 
-      return saved.copyWith(
+      final updatedAchievement = saved.copyWith(
         progress: progress,
         unlockedAt: shouldUnlock ? DateTime.now() : saved.unlockedAt,
       );
+
+      // If this achievement was just unlocked, trigger celebration
+      // Defer this to avoid modifying providers during initialization
+      if (shouldUnlock && saved.unlockedAt == null) {
+        Future.microtask(() {
+          _ref.read(newlyUnlockedAchievementProvider.notifier).state =
+              updatedAchievement;
+        });
+      }
+
+      return updatedAchievement;
     }).toList();
 
     state = updatedAchievements;

@@ -287,6 +287,17 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
     PracticeSession? session;
     try {
       _recordingTimer?.cancel();
+      
+      // Calculate actual recording duration from start time
+      Duration actualDuration = _recordingDuration;
+      if (_recordingStartTime != null) {
+        final calculatedDuration = DateTime.now().difference(_recordingStartTime!);
+        // Use the longer of the two to be more accurate
+        if (calculatedDuration > actualDuration) {
+          actualDuration = calculatedDuration;
+        }
+      }
+      
       audioPath = await _recorder.stop();
       setState(() {
         _isRecording = false;
@@ -301,7 +312,55 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
         _cleanupAudioFile(_currentAudioPath);
         return;
       }
+      
       final file = File(audioPath);
+      
+      // Check if file exists and has content
+      if (!await file.exists()) {
+        _cleanupAudioFile(audioPath);
+        return;
+      }
+      
+      // Check file size (very small files likely have no audio)
+      // Audio file headers are usually at least a few KB, so very small files are likely empty
+      final fileSize = await file.length();
+      if (fileSize < 5000) { // Less than 5KB is likely empty/no audio (increased threshold)
+        _cleanupAudioFile(audioPath);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                widget.language == 'ko'
+                    ? '녹음된 내용이 없습니다. 다시 녹음해주세요.'
+                    : 'No audio recorded. Please record again.',
+              ),
+              duration: const Duration(seconds: 3),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+      
+      // Check if recording duration is too short (less than 0.5 seconds)
+      // Only reject very short recordings that are likely accidental
+      if (actualDuration.inMilliseconds < 500) {
+        _cleanupAudioFile(audioPath);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                widget.language == 'ko'
+                    ? '녹음 시간이 너무 짧습니다. 다시 녹음해주세요.'
+                    : 'Recording is too short. Please record again.',
+              ),
+              duration: const Duration(seconds: 3),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
 
       // Debug: log the file path and extension
       print('Recording file path: $audioPath');
@@ -356,6 +415,69 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
       }
 
       transcript = (t['transcript'] ?? '') as String;
+
+      // Check if transcript is empty or seems like placeholder/generic response
+      final trimmedTranscript = transcript.trim();
+      
+      if (trimmedTranscript.isEmpty) {
+        setState(() => _isProcessing = false);
+        _cleanupAudioFile(audioPath);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                widget.language == 'ko'
+                    ? '녹음된 내용을 인식할 수 없습니다. 다시 녹음해주세요.'
+                    : 'Could not recognize any speech. Please record again.',
+              ),
+              duration: const Duration(seconds: 3),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+      
+      // Check for common placeholder phrases that indicate no real speech was detected
+      // These are generic responses the API might return when it can't detect speech
+      final lowerTranscript = trimmedTranscript.toLowerCase();
+      final placeholderPatterns = [
+        '시청해주셔서 감사합니다',
+        'thank you for watching',
+        '감사합니다',
+        'thank you',
+      ];
+      
+      // Check if transcript matches placeholder patterns exactly or is very short with placeholder content
+      final isPlaceholder = placeholderPatterns.any((pattern) {
+        final patternLower = pattern.toLowerCase();
+        // Match if transcript contains the pattern and is short (likely a generic response)
+        return lowerTranscript.contains(patternLower) && 
+               trimmedTranscript.length < 100 &&
+               // Also check if it's mostly just the placeholder phrase
+               (lowerTranscript == patternLower || 
+                lowerTranscript.startsWith(patternLower) ||
+                lowerTranscript.endsWith(patternLower));
+      });
+      
+      if (isPlaceholder) {
+        setState(() => _isProcessing = false);
+        _cleanupAudioFile(audioPath);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                widget.language == 'ko'
+                    ? '녹음된 내용을 인식할 수 없습니다. 다시 녹음해주세요.'
+                    : 'Could not recognize any speech. Please record again.',
+              ),
+              duration: const Duration(seconds: 3),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
 
       // Ensure audio file exists and is accessible
       if (!await file.exists()) {
@@ -830,7 +952,9 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
               : SingleChildScrollView(
                   padding: AppPadding.allLg,
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.start,
+                    mainAxisAlignment: _isProcessing 
+                        ? MainAxisAlignment.center 
+                        : MainAxisAlignment.start,
                     children: [
                       // Display image if selected (always visible, even during recording)
                       if (_selectedImage != null) ...[
@@ -1022,15 +1146,22 @@ class _RecordScreenState extends ConsumerState<RecordScreen> {
                         const SizedBox(height: 24),
                       ],
                       if (_isProcessing)
-                        Column(
-                          children: [
-                            const CircularProgressIndicator(),
-                            const SizedBox(height: 24),
-                            Text(
-                              isKorean ? '처리 중...' : 'Processing...',
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                          ],
+                        Container(
+                          height: MediaQuery.of(context).size.height * 0.7,
+                          alignment: Alignment.center,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              const CircularProgressIndicator(),
+                              const SizedBox(height: 24),
+                              Text(
+                                isKorean ? '처리 중...' : 'Processing...',
+                                style: Theme.of(context).textTheme.titleLarge,
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
                         )
                       else
                         Column(
